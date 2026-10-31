@@ -12,11 +12,11 @@ def test_fmt():
     assert fmt.power(560.4) == "560 Вт"
     assert fmt.power(1234) == "1,23 кВт"
     assert fmt.power(50, signed=True) == "+50 Вт"
-    assert fmt.energy(80) == "80 Вт·ч"
-    assert fmt.energy(12_345) == "12,35 кВт·ч"
+    assert fmt.energy(80) == "80 Вт·год"
+    assert fmt.energy(12_345) == "12,35 кВт·год"
     assert fmt.percent(62.0) == "62%"
-    assert fmt.rssi_quality(-65) == "-65 dBm, хороший"
-    assert fmt.ago(100, 130) == "30 с назад"
+    assert fmt.rssi_quality(-65) == "-65 dBm, добрий"
+    assert fmt.ago(100, 130) == "30 с тому"
 
 
 def test_config_roundtrip(tmp_path, monkeypatch):
@@ -37,12 +37,12 @@ def test_poller_stops_fast_while_waiting(tmp_path):
         statuses = []
         p = Poller(cfg, tmp_path / "m.db", on_status=statuses.append)
         p.start()
-        time.sleep(0.5)  # поток ждёт ответа на Marstek.GetDevice
+        time.sleep(0.5)  # потік чекає на відповідь на Marstek.GetDevice
         t0 = time.monotonic()
         p.stop()
         p.join(3)
         assert not p.is_alive()
         assert time.monotonic() - t0 < 2
-        assert "Ошибка сети" not in statuses
+        assert "Помилка мережі" not in statuses
     finally:
         silent.stop()

@@ -1,14 +1,14 @@
 """UDP-транспорт Marstek Device Open API.
 
-Станция принимает JSON-запросы по UDP и отвечает JSON-RPC-подобными
-сообщениями. Протокол описан в docs/open-api.md.
+Станція приймає JSON-запити по UDP і відповідає JSON-RPC-подібними
+повідомленнями. Протокол описано в docs/open-api.md.
 
-Особенности, которые учитывает клиент:
-- ответы по Wi-Fi теряются, поэтому у каждого запроса таймаут и повторы;
-- запросы идут строго последовательно (станция плохо переносит параллельные);
-- часть прошивок отвечает на порт, который слушает сама станция, а не на
-  порт отправителя, поэтому локальный сокет по умолчанию биндится на тот же
-  порт (30000). Если порт занят, используется случайный.
+Особливості, які враховує клієнт:
+- відповіді через Wi-Fi губляться, тому кожен запит має тайм-аут і повтори;
+- запити йдуть суворо послідовно (станція погано переносить паралельні);
+- частина прошивок відповідає на порт, який слухає сама станція, а не на
+  порт відправника, тому локальний сокет типово прив'язується до того самого
+  порту (30000). Якщо порт зайнятий, використовується випадковий.
 """
 
 from __future__ import annotations
@@ -25,36 +25,36 @@ log = logging.getLogger(__name__)
 
 DEFAULT_PORT = 30000
 DEFAULT_TIMEOUT = 10.0
-DEFAULT_RETRIES = 2  # повторов после первой попытки
+DEFAULT_RETRIES = 2  # повторів після першої спроби
 RETRY_DELAY = 1.5
 MAX_DATAGRAM = 65535
 
 
 class MarstekError(Exception):
-    """Базовая ошибка общения со станцией."""
+    """Базова помилка зв'язку зі станцією."""
 
 
 class MarstekTimeout(MarstekError):
-    """Станция не ответила за отведённое время (с учётом повторов)."""
+    """Станція не відповіла за відведений час (з урахуванням повторів)."""
 
     def __init__(self, method: str, host: str, attempts: int):
-        super().__init__(f"{method}: нет ответа от {host} после {attempts} попыток")
+        super().__init__(f"{method}: немає відповіді від {host} після {attempts} спроб")
         self.method = method
         self.host = host
         self.attempts = attempts
 
 
 class TransportClosed(MarstekError):
-    """Клиент закрыт — ожидание ответа прервано."""
+    """Клієнт закрито — очікування відповіді перервано."""
 
 
 class MarstekRpcError(MarstekError):
-    """Станция вернула объект error (JSON-RPC)."""
+    """Станція повернула об'єкт error (JSON-RPC)."""
 
     METHOD_NOT_FOUND = -32601
 
     def __init__(self, method: str, code: int | None, message: str, data: Any = None):
-        text = f"{method}: ошибка {code} {message}"
+        text = f"{method}: помилка {code} {message}"
         if data is not None:
             text += f" (data={data})"
         super().__init__(text)
@@ -70,7 +70,7 @@ class MarstekRpcError(MarstekError):
 
 @dataclass(frozen=True)
 class Reply:
-    """Успешный ответ станции."""
+    """Успішна відповідь станції."""
 
     method: str
     host: str
@@ -81,10 +81,10 @@ class Reply:
 
 
 class UdpTransport:
-    """Последовательный UDP-клиент для одной или нескольких станций.
+    """Послідовний UDP-клієнт для однієї або кількох станцій.
 
-    Один экземпляр владеет одним сокетом. Методы потокобезопасны: запросы
-    из разных потоков выстраиваются в очередь через блокировку.
+    Один екземпляр володіє одним сокетом. Методи потокобезпечні: запити
+    з різних потоків шикуються в чергу через блокування.
     """
 
     def __init__(
@@ -114,9 +114,9 @@ class UdpTransport:
                 sock.close()
                 raise
             log.warning(
-                "Порт %s занят (%s), использую случайный порт. "
-                "Если станция не отвечает, закройте другие программы, "
-                "работающие с Marstek.", bind_port, exc,
+                "Порт %s зайнятий (%s), використовую випадковий порт. "
+                "Якщо станція не відповідає, закрийте інші програми, "
+                "що працюють з Marstek.", bind_port, exc,
             )
             sock.close()
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -129,8 +129,8 @@ class UdpTransport:
         return self._sock.getsockname()[1]
 
     def close(self) -> None:
-        """Закрыть клиент. Можно звать из другого потока: идущий запрос прервётся
-        в течение ~0,25 с, а сокет закроет поток, который им сейчас пользуется."""
+        """Закрити клієнт. Можна викликати з іншого потоку: поточний запит перерветься
+        протягом ~0,25 с, а сокет закриє потік, який зараз ним користується."""
         self._closing.set()
         if self._lock.acquire(blocking=False):
             try:
@@ -145,7 +145,7 @@ class UdpTransport:
     def _check_open(self) -> None:
         if self._closing.is_set():
             self._sock.close()
-            raise TransportClosed("клиент закрыт")
+            raise TransportClosed("клієнт закрито")
 
     def __enter__(self) -> UdpTransport:
         return self
@@ -153,14 +153,14 @@ class UdpTransport:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
-    # --- запросы ---------------------------------------------------------
+    # --- запити ---------------------------------------------------------
 
     def _take_id(self) -> int:
         self._next_id = (self._next_id + 1) % 1_000_000
         return self._next_id
 
     def _drain(self) -> None:
-        """Выбросить опоздавшие ответы на прошлые запросы."""
+        """Відкинути запізнілі відповіді на попередні запити."""
         self._sock.setblocking(False)
         try:
             while True:
@@ -179,7 +179,7 @@ class UdpTransport:
         timeout: float | None = None,
         retries: int | None = None,
     ) -> Reply:
-        """Отправить запрос и дождаться ответа с тем же id от этого хоста."""
+        """Надіслати запит і дочекатися відповіді з тим самим id від цього хоста."""
         timeout = self.timeout if timeout is None else timeout
         retries = self.retries if retries is None else retries
         params = {"id": 0} if params is None else params
@@ -200,7 +200,7 @@ class UdpTransport:
                 try:
                     raw = self._wait_reply(host, req_id, started + timeout)
                 except TimeoutError:
-                    log.debug("%s: таймаут, попытка %d/%d", method, attempt, attempts)
+                    log.debug("%s: тайм-аут, спроба %d/%d", method, attempt, attempts)
                     if attempt < attempts:
                         self._closing.wait(RETRY_DELAY)
                     continue
@@ -212,7 +212,7 @@ class UdpTransport:
                     )
                 result = raw.get("result")
                 if not isinstance(result, dict):
-                    raise MarstekError(f"{method}: в ответе нет result: {raw}")
+                    raise MarstekError(f"{method}: у відповіді немає result: {raw}")
                 return Reply(method, host, raw.get("src"), result, raw, elapsed)
         raise MarstekTimeout(method, host, attempts)
 
@@ -228,7 +228,7 @@ class UdpTransport:
             except socket.timeout:
                 continue
             except ConnectionResetError:
-                # Windows: ICMP «порт недоступен» от прошлой отправки
+                # Windows: ICMP «порт недоступний» від попереднього надсилання
                 continue
             if src_host != host:
                 continue
@@ -239,7 +239,7 @@ class UdpTransport:
             msg_id = msg.get("id")
             if msg_id == req_id or str(msg_id) == str(req_id):
                 return msg
-            # Ошибка разбора приходит с id=0 — она относится к текущему запросу
+            # Помилка розбору приходить з id=0 — вона стосується поточного запиту
             if msg_id == 0 and "error" in msg:
                 return msg
 
@@ -252,7 +252,7 @@ class UdpTransport:
         repeats: int = 2,
         addresses: list[str] | None = None,
     ) -> list[tuple[str, dict[str, Any]]]:
-        """Разослать запрос широковещательно и собрать ответы (host, сообщение)."""
+        """Розіслати запит широкомовно і зібрати відповіді (host, повідомлення)."""
         addresses = addresses or ["255.255.255.255"]
         found: dict[str, dict[str, Any]] = {}
         with self._lock:
@@ -292,7 +292,7 @@ def _parse(data: bytes) -> dict[str, Any] | None:
 
 
 def local_broadcast_addresses() -> list[str]:
-    """Широковещательные адреса: общий + /24 основного интерфейса."""
+    """Широкомовні адреси: загальна + /24 основного інтерфейсу."""
     addrs = ["255.255.255.255"]
     try:
         probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

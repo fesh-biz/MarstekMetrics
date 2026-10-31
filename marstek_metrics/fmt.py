@@ -1,4 +1,4 @@
-"""Форматирование чисел для интерфейса."""
+"""Форматування чисел для інтерфейсу."""
 
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ def energy(wh: float | None) -> str:
     if wh is None:
         return DASH
     if abs(wh) >= 100:
-        return f"{wh / 1000:.2f} кВт·ч".replace(".", ",")
-    return f"{wh:.0f} Вт·ч"
+        return f"{wh / 1000:.2f} кВт·год".replace(".", ",")
+    return f"{wh:.0f} Вт·год"
 
 
 def percent(v: float | None, digits: int = 0) -> str:
@@ -39,34 +39,34 @@ def ts_full(ts: float | None) -> str:
         return DASH
     d = dt.datetime.fromtimestamp(ts)
     if d.date() == dt.date.today():
-        return "сегодня " + d.strftime("%H:%M:%S")
+        return "сьогодні " + d.strftime("%H:%M:%S")
     return d.strftime("%d.%m.%Y %H:%M:%S")
 
 
 def ago(ts: float | None, now: float) -> str:
     if ts is None:
-        return "нет данных"
+        return "немає даних"
     s = max(0, int(now - ts))
     if s < 60:
-        return f"{s} с назад"
+        return f"{s} с тому"
     if s < 3600:
-        return f"{s // 60} мин назад"
-    return f"{s // 3600} ч назад"
+        return f"{s // 60} хв тому"
+    return f"{s // 3600} год тому"
 
 
 def rssi_quality(rssi: float | None) -> str:
     if rssi is None:
         return DASH
     if rssi >= -60:
-        q = "отличный"
+        q = "відмінний"
     elif rssi >= -70:
-        q = "хороший"
+        q = "добрий"
     elif rssi >= -80:
-        q = "слабый"
+        q = "слабкий"
     else:
-        q = "очень слабый"
+        q = "дуже слабкий"
     return f"{rssi:.0f} dBm, {q}"
 
 
 def yes_no(v: bool | None) -> str:
-    return DASH if v is None else ("да" if v else "нет")
+    return DASH if v is None else ("так" if v else "ні")

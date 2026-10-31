@@ -1,4 +1,4 @@
-"""История телеметрии и журнал событий в SQLite."""
+"""Історія телеметрії та журнал подій у SQLite."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ _TYPES = {
 
 
 class Storage:
-    """Одно соединение на поток: создавайте свой экземпляр в каждом потоке."""
+    """Одне з'єднання на потік: створюйте власний екземпляр у кожному потоці."""
 
     def __init__(self, path: Path | str):
         self.path = str(path)
@@ -52,7 +52,7 @@ class Storage:
         self.db.execute("CREATE INDEX IF NOT EXISTS events_ts ON events(ts)")
         self.db.commit()
 
-    # --- запись ---------------------------------------------------------
+    # --- запис ---------------------------------------------------------
 
     def add_sample(self, t: Telemetry) -> None:
         row = t.to_row()
@@ -76,7 +76,7 @@ class Storage:
         self.db.execute("DELETE FROM events WHERE ts < ?", (cutoff,))
         self.db.commit()
 
-    # --- чтение ---------------------------------------------------------
+    # --- читання ---------------------------------------------------------
 
     def samples(self, since: float, until: float | None = None) -> list[Telemetry]:
         until = time.time() + 60 if until is None else until

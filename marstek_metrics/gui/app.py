@@ -1,4 +1,4 @@
-"""Точка входа десктопного приложения."""
+"""Точка входу десктопного застосунку."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 
-from . import theme  # noqa: F401  (до импорта pyqtgraph — выбирает PySide6)
+from . import theme  # noqa: F401  (до імпорту pyqtgraph — обирає PySide6)
 from ..config import AppConfig, data_dir
 
 

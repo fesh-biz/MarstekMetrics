@@ -1,4 +1,4 @@
 import os
 
-# pyqtgraph должен подхватить именно PySide6
+# pyqtgraph має підхопити саме PySide6
 os.environ.setdefault("PYQTGRAPH_QT_LIB", "PySide6")

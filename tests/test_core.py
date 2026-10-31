@@ -50,7 +50,7 @@ def test_get_device_and_status(mock, transport):
     tel, errors = collect_once(dev, info.profile, slow=True, gap=0)
     assert errors == []
     assert tel.soc is not None and tel.mode == "Auto"
-    assert tel.battery_power_derived  # bat_power в ответе нет
+    assert tel.battery_power_derived  # bat_power у відповіді немає
     assert tel.ct_connected is True and tel.house_power is not None
     assert tel.rssi is not None
 
@@ -106,7 +106,7 @@ def test_discover_broadcast_addresses(mock, transport):
     assert replies and replies[0][1]["result"]["device"] == "VenusE 3.0"
 
 
-# --- нормализация ---------------------------------------------------------
+# --- нормалізація ---------------------------------------------------------
 
 
 @pytest.mark.parametrize("model,family", [
@@ -122,7 +122,7 @@ def test_es_status_derives_battery_and_house():
     p = Profile("venus_e", 150)
     t = Telemetry()
     apply_es_status(t, {"bat_soc": 50, "ongrid_power": 600, "offgrid_power": 0, "pv_power": 0}, p)
-    assert t.battery_power == -600 and t.battery_power_derived  # разряд
+    assert t.battery_power == -600 and t.battery_power_derived  # розряджання
     apply_em_status(t, {"ct_state": 1, "total_power": 150, "input_energy": 1000, "output_energy": 20}, p)
     assert t.meter_import_wh == 100 and t.meter_export_wh == 2
     finalize(t)
@@ -154,11 +154,11 @@ def test_normalize_mode():
 
 def test_alerts_raise_and_clear_once():
     eng = AlertEngine(AppConfig(offline_after=2))
-    err = [CommError("ES.GetStatus", "timeout", "нет ответа")]
+    err = [CommError("ES.GetStatus", "timeout", "немає відповіді")]
     assert [e.code for e in eng.on_cycle([], err)] == []
     ev = eng.on_cycle([], err)
     assert {e.code for e in ev} == {"comm:ES.GetStatus", "offline"}
-    assert eng.on_cycle([], err) == []  # без повторов
+    assert eng.on_cycle([], err) == []  # без повторів
     ev = eng.on_cycle(["ES.GetStatus"], [])
     assert {e.code for e in ev} == {"comm:ES.GetStatus", "offline"}
     assert all(e.resolved for e in ev)
@@ -188,7 +188,7 @@ def test_alerts_device_and_firmware():
     assert [e.code for e in eng.on_device(DeviceInfo("h", "VenusE", 154))] == ["firmware"]
 
 
-# --- расход и хранение ------------------------------------------------------
+# --- споживання та зберігання ------------------------------------------------------
 
 
 def test_integrate_and_gaps():

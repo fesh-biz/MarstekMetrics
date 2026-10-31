@@ -1,4 +1,4 @@
-"""Расчёт расхода энергии по истории телеметрии."""
+"""Розрахунок споживання енергії за історією телеметрії."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from itertools import pairwise
 
 from .models import Telemetry
 
-# Если между замерами прошло больше этого, отрезок не интегрируем —
-# программа была выключена или станция не отвечала.
+# Якщо між вимірами минуло більше, відрізок не інтегруємо —
+# програма була вимкнена або станція не відповідала.
 MAX_GAP_S = 300
 
 
@@ -19,7 +19,7 @@ def integrate_wh(
     value: Callable[[Telemetry], float | None],
     max_gap: float = MAX_GAP_S,
 ) -> float:
-    """Энергия (Wh) по трапециям; отрезки с разрывом > max_gap пропускаются."""
+    """Енергія (Wh) методом трапецій; відрізки з розривом > max_gap пропускаються."""
     total = 0.0
     for a, b in pairwise(samples):
         dt_s = b.ts - a.ts
@@ -47,7 +47,7 @@ def _neg(attr: str) -> Callable[[Telemetry], float | None]:
 
 
 def _counter_delta(samples: list[Telemetry], attr: str) -> float | None:
-    """Прирост накопительного счётчика (с учётом сбросов)."""
+    """Приріст накопичувального лічильника (з урахуванням скидань)."""
     values = [getattr(s, attr) for s in samples if getattr(s, attr) is not None]
     if len(values) < 2:
         return None
@@ -63,19 +63,19 @@ class EnergySummary:
     label: str
     start: float
     end: float
-    house_wh: float = 0.0          # потребление дома
-    grid_import_wh: float = 0.0    # взято из внешней сети
-    grid_export_wh: float = 0.0    # отдано во внешнюю сеть
-    station_out_wh: float = 0.0    # станция отдала в дом
-    station_in_wh: float = 0.0     # станция взяла на заряд
+    house_wh: float = 0.0          # споживання будинку
+    grid_import_wh: float = 0.0    # взято із зовнішньої мережі
+    grid_export_wh: float = 0.0    # віддано у зовнішню мережу
+    station_out_wh: float = 0.0    # станція віддала в будинок
+    station_in_wh: float = 0.0     # станція взяла на заряджання
     peak_house_w: float | None = None
     avg_house_w: float | None = None
     samples: int = 0
-    coverage: float = 0.0          # доля периода, покрытая данными
+    coverage: float = 0.0          # частка періоду, покрита даними
 
     @property
     def self_supply_share(self) -> float | None:
-        """Какая доля потребления дома покрыта станцией."""
+        """Яку частку споживання будинку покрила станція."""
         if self.house_wh <= 0:
             return None
         return min(1.0, self.station_out_wh / self.house_wh)
@@ -113,7 +113,7 @@ def local_day_bounds(day: dt.date) -> tuple[float, float]:
 def daily_summaries(
     load: Callable[[float, float], list[Telemetry]], days: int, today: dt.date | None = None
 ) -> list[EnergySummary]:
-    """Сводки за последние `days` дней (старые → новые). load(since, until) → замеры."""
+    """Зведення за останні `days` днів (старі → нові). load(since, until) → виміри."""
     today = today or dt.date.today()
     out = []
     for i in range(days - 1, -1, -1):

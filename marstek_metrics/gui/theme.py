@@ -1,14 +1,14 @@
-"""Цвета и стили интерфейса."""
+"""Кольори та стилі інтерфейсу."""
 
 from __future__ import annotations
 
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication
 
-# Цвета серий (одинаковые на всех графиках и плитках)
-HOUSE = "#2563eb"    # потребление дома
-GRID = "#64748b"     # внешняя сеть
-STATION = "#16a34a"  # станция
+# Кольори серій (однакові на всіх графіках і плитках)
+HOUSE = "#2563eb"    # споживання будинку
+GRID = "#64748b"     # зовнішня мережа
+STATION = "#16a34a"  # станція
 BATTERY = "#d97706"  # батарея
 
 LEVEL_COLORS = {"error": "#dc2626", "warning": "#d97706", "info": "#64748b"}

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "marstek-metrics"
 version = "0.1.0"
-description = "Мониторинг станций Marstek Venus через локальный Open API"
+description = "Моніторинг станцій Marstek Venus через локальний Open API"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

@@ -1,10 +1,10 @@
-"""Эмулятор станции Venus E 3.0 (прошивка 150) для проверки без железа.
+"""Емулятор станції Venus E 3.0 (прошивка 150) для перевірки без заліза.
 
 Запуск: python -m marstek_metrics.mock --port 30000
-В программе укажите IP 127.0.0.1 и тот же порт.
+У програмі вкажіть IP 127.0.0.1 і той самий порт.
 
-Эмулятор повторяет особенности реальной прошивки: нет bat_power в
-ES.GetStatus, нули CT в ES.GetMode, PV.GetStatus → Method not found.
+Емулятор повторює особливості реальної прошивки: немає bat_power в
+ES.GetStatus, нулі CT в ES.GetMode, PV.GetStatus → Method not found.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ class MockVenus:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
-    # --- физика ---------------------------------------------------------
+    # --- фізика ---------------------------------------------------------
 
     def _house_load(self, now: float) -> float:
         hour = time.localtime(now).tm_hour + time.localtime(now).tm_min / 60
@@ -57,11 +57,11 @@ class MockVenus:
         return base + self.rng.uniform(-60, 120)
 
     def _station_power(self, load: float) -> float:
-        """+ отдаёт в дом, − заряжается."""
+        """+ віддає в будинок, − заряджається."""
         if self.mode == "Passive":
             return 0.0
         if self.soc > 12 and load > 0:
-            return min(load * 0.9, 800.0)  # авто: покрывает почти всю нагрузку
+            return min(load * 0.9, 800.0)  # авто: покриває майже все навантаження
         return -300.0 if self.soc < 95 else 0.0
 
     def _step(self) -> dict[str, float]:
@@ -82,7 +82,7 @@ class MockVenus:
             self.meter_export += -grid * dt / 360
         return {"load": load, "station": station, "grid": grid}
 
-    # --- ответы ---------------------------------------------------------
+    # --- відповіді ---------------------------------------------------------
 
     def handle(self, msg: dict[str, Any]) -> dict[str, Any] | None:
         method = msg.get("method")
@@ -183,14 +183,14 @@ class MockVenus:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Эмулятор Marstek Venus E 3.0")
+    ap = argparse.ArgumentParser(description="Емулятор Marstek Venus E 3.0")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=30000)
-    ap.add_argument("--drop", type=float, default=0.1, help="доля потерянных ответов (0..1)")
-    ap.add_argument("--no-ct", action="store_true", help="CT-счётчик не подключён")
+    ap.add_argument("--drop", type=float, default=0.1, help="частка втрачених відповідей (0..1)")
+    ap.add_argument("--no-ct", action="store_true", help="CT-лічильник не підключено")
     args = ap.parse_args()
     mock = MockVenus(args.host, args.port, args.drop, not args.no_ct)
-    print(f"Эмулятор Venus E 3.0 слушает {mock.host}:{mock.port}. Ctrl+C — выход.")
+    print(f"Емулятор Venus E 3.0 слухає {mock.host}:{mock.port}. Ctrl+C — вихід.")
     try:
         mock.serve_forever()
     except KeyboardInterrupt:

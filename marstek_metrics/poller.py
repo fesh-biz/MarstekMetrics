@@ -1,4 +1,4 @@
-"""Фоновый опрос станции."""
+"""Фонове опитування станції."""
 
 from __future__ import annotations
 
@@ -27,8 +27,8 @@ from .storage import Storage
 
 log = logging.getLogger(__name__)
 
-SLOW_EVERY = 10          # Wi-Fi / батарея — раз в N циклов
-DEVICE_EVERY_S = 3600    # Marstek.GetDevice — раз в час
+SLOW_EVERY = 10          # Wi-Fi / батарея — раз на N циклів
+DEVICE_EVERY_S = 3600    # Marstek.GetDevice — раз на годину
 PRUNE_EVERY_S = 86400
 
 
@@ -50,7 +50,7 @@ def collect_once(
     ok: list[str] | None = None,
     stop: threading.Event | None = None,
 ) -> tuple[Telemetry, list[CommError]]:
-    """Один цикл опроса. Возвращает срез телеметрии и сбои связи."""
+    """Один цикл опитування. Повертає зріз телеметрії та збої зв'язку."""
     t = Telemetry()
     errors: list[CommError] = []
     ok = [] if ok is None else ok
@@ -85,10 +85,10 @@ def collect_once(
 
 
 class Poller(threading.Thread):
-    """Опрашивает станцию по расписанию, пишет историю и журнал.
+    """Опитує станцію за розкладом, пише історію та журнал.
 
-    Колбэки вызываются из фонового потока — GUI должен передавать их в
-    главный поток (сигналы Qt).
+    Колбеки викликаються з фонового потоку — GUI має передавати їх у
+    головний потік (сигнали Qt).
     """
 
     def __init__(
@@ -113,7 +113,7 @@ class Poller(threading.Thread):
         self._transport: UdpTransport | None = None
 
     def stop(self) -> None:
-        """Остановить опрос. Закрытие сокета прерывает ожидание ответа."""
+        """Зупинити опитування. Закриття сокета перериває очікування відповіді."""
         self._stop.set()
         self._wake.set()
         if self._transport is not None:
@@ -140,10 +140,10 @@ class Poller(threading.Thread):
                 retries=cfg.retries,
             )
         except OSError as exc:
-            ev = Event("error", "socket", f"Не удалось открыть UDP-сокет: {exc}")
+            ev = Event("error", "socket", f"Не вдалося відкрити UDP-сокет: {exc}")
             storage.add_events([ev])
             self.on_events([ev])
-            self.on_status("Ошибка сети")
+            self.on_status("Помилка мережі")
             storage.close()
             return
 
@@ -152,8 +152,8 @@ class Poller(threading.Thread):
             self._loop(transport, storage, alerts)
         except OSError:
             if not self._stop.is_set():
-                log.exception("Сбой опроса")
-                self.on_status("Ошибка сети")
+                log.exception("Збій опитування")
+                self.on_status("Помилка мережі")
         finally:
             transport.close()
             storage.close()
@@ -169,7 +169,7 @@ class Poller(threading.Thread):
             events: list[Event] = []
 
             if self.info is None or time.time() - last_device_check > DEVICE_EVERY_S:
-                self.on_status("Подключение…" if self.info is None else "Опрос…")
+                self.on_status("Підключення…" if self.info is None else "Опитування…")
                 try:
                     info = dev.get_device()
                     last_device_check = time.time()
@@ -181,11 +181,11 @@ class Poller(threading.Thread):
                     if self.info is None:
                         storage.add_events(events)
                         self.on_events(events)
-                        self.on_status("Нет связи")
+                        self.on_status("Немає зв'язку")
                         self._sleep(cfg.interval)
                         continue
 
-            self.on_status("Опрос…")
+            self.on_status("Опитування…")
             ok: list[str] = []
             tel, errors = collect_once(
                 dev, self.info.profile,
@@ -201,15 +201,15 @@ class Poller(threading.Thread):
             events += alerts.on_cycle(ok, errors)
             if ok:
                 if tel.rssi is None and alerts.last is not None:
-                    tel.rssi = alerts.last.rssi  # Wi-Fi читаем реже — держим последнее
+                    tel.rssi = alerts.last.rssi  # Wi-Fi читаємо рідше — тримаємо останнє
                 events += alerts.on_telemetry(tel)
                 storage.add_sample(tel)
                 self.on_telemetry(tel)
             storage.add_events(events)
             if events:
                 self.on_events(events)
-            self.on_status("Нет связи" if alerts.offline else
-                           "На связи" if ok else "Нет ответа")
+            self.on_status("Немає зв'язку" if alerts.offline else
+                           "На зв'язку" if ok else "Немає відповіді")
 
             if time.time() - last_prune > PRUNE_EVERY_S:
                 storage.prune(cfg.retention_days)

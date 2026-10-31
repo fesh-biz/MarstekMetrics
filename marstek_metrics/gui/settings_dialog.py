@@ -1,4 +1,4 @@
-"""Окно настроек с поиском станций в сети."""
+"""Вікно налаштувань із пошуком станцій у мережі."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from ..protocol import UdpTransport
 
 
 class _DiscoverSignals(QObject):
-    done = Signal(object, str)  # list[DeviceInfo], ошибка
+    done = Signal(object, str)  # list[DeviceInfo], помилка
 
 
 def _spin(lo: int, hi: int, value: int, suffix: str = "") -> QSpinBox:
@@ -46,7 +46,7 @@ def _spin(lo: int, hi: int, value: int, suffix: str = "") -> QSpinBox:
 class SettingsDialog(QDialog):
     def __init__(self, cfg: AppConfig, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Настройки")
+        self.setWindowTitle("Налаштування")
         self.setMinimumWidth(520)
         self.cfg = cfg
         self._signals = _DiscoverSignals()
@@ -54,17 +54,17 @@ class SettingsDialog(QDialog):
 
         root = QVBoxLayout(self)
 
-        # --- станция
-        box = QGroupBox("Станция")
+        # --- станція
+        box = QGroupBox("Станція")
         form = QFormLayout(box)
         host_row = QHBoxLayout()
         self.host = QLineEdit(cfg.host)
-        self.host.setPlaceholderText("например, 192.168.1.50")
-        self.find_btn = QPushButton("Найти в сети")
+        self.host.setPlaceholderText("наприклад, 192.168.1.50")
+        self.find_btn = QPushButton("Знайти в мережі")
         self.find_btn.clicked.connect(lambda _c=False: self._discover())
         host_row.addWidget(self.host, 1)
         host_row.addWidget(self.find_btn)
-        form.addRow("IP-адрес", host_row)
+        form.addRow("IP-адреса", host_row)
         self.found = QListWidget()
         self.found.setMaximumHeight(90)
         self.found.hide()
@@ -72,50 +72,50 @@ class SettingsDialog(QDialog):
         form.addRow("", self.found)
         self.port = _spin(1, 65535, cfg.port)
         form.addRow("UDP-порт Open API", self.port)
-        hint = QLabel("Open API включается в приложении Marstek. Закрепите за станцией "
-                      "постоянный IP в настройках роутера.")
+        hint = QLabel("Open API вмикається в застосунку Marstek. Закріпіть за станцією "
+                      "постійну IP-адресу в налаштуваннях роутера.")
         hint.setObjectName("muted")
         hint.setWordWrap(True)
         form.addRow("", hint)
         root.addWidget(box)
 
-        # --- опрос
-        box = QGroupBox("Опрос")
+        # --- опитування
+        box = QGroupBox("Опитування")
         form = QFormLayout(box)
         self.interval = _spin(10, 3600, cfg.interval, " с")
-        self.interval.setToolTip("Опрос чаще 30 с может делать станцию нестабильной")
-        form.addRow("Интервал", self.interval)
+        self.interval.setToolTip("Опитування частіше ніж раз на 30 с може робити станцію нестабільною")
+        form.addRow("Інтервал", self.interval)
         self.timeout = _spin(2, 60, int(cfg.timeout), " с")
-        form.addRow("Ожидание ответа", self.timeout)
+        form.addRow("Очікування відповіді", self.timeout)
         self.retries = _spin(0, 5, cfg.retries)
-        form.addRow("Повторов при потере", self.retries)
-        self.bind = QCheckBox("Принимать ответы на порту станции (рекомендуется)")
+        form.addRow("Повторів при втраті", self.retries)
+        self.bind = QCheckBox("Приймати відповіді на порту станції (рекомендовано)")
         self.bind.setChecked(cfg.bind_device_port)
         form.addRow("", self.bind)
-        self.battery = QCheckBox("Читать данные BMS (температура, запреты заряда/разряда)")
+        self.battery = QCheckBox("Читати дані BMS (температура, заборони заряджання/розряджання)")
         self.battery.setChecked(cfg.read_battery)
         self.battery.toggled.connect(self._warn_battery)
         form.addRow("", self.battery)
         root.addWidget(box)
 
         # --- пороги
-        box = QGroupBox("Предупреждения")
+        box = QGroupBox("Попередження")
         form = QFormLayout(box)
         self.soc_low = _spin(0, 100, cfg.soc_low, " %")
-        form.addRow("Низкий заряд, ниже", self.soc_low)
+        form.addRow("Низький заряд, нижче", self.soc_low)
         self.rssi_low = _spin(-100, -30, cfg.rssi_low, " dBm")
-        form.addRow("Слабый Wi-Fi, ниже", self.rssi_low)
+        form.addRow("Слабкий Wi-Fi, нижче", self.rssi_low)
         self.temp_high = _spin(30, 80, cfg.temp_high, " °C")
-        form.addRow("Перегрев батареи, от", self.temp_high)
+        form.addRow("Перегрів батареї, від", self.temp_high)
         self.offline_after = _spin(1, 20, cfg.offline_after)
-        form.addRow("«Нет связи» после циклов", self.offline_after)
+        form.addRow("«Немає зв'язку» після циклів", self.offline_after)
         self.retention = _spin(7, 3650, cfg.retention_days, " дн")
-        form.addRow("Хранить историю", self.retention)
+        form.addRow("Зберігати історію", self.retention)
         root.addWidget(box)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
-        buttons.button(QDialogButtonBox.StandardButton.Save).setText("Сохранить")
-        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Отмена")
+        buttons.button(QDialogButtonBox.StandardButton.Save).setText("Зберегти")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Скасувати")
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
@@ -123,16 +123,16 @@ class SettingsDialog(QDialog):
     def _warn_battery(self, on: bool) -> None:
         if on:
             QMessageBox.warning(
-                self, "Данные BMS",
-                "На некоторых прошивках запрос Bat.GetStatus перезагружает станцию.\n"
-                "Включите и понаблюдайте: если станция начнёт перезагружаться — выключите.",
+                self, "Дані BMS",
+                "На деяких прошивках запит Bat.GetStatus перезавантажує станцію.\n"
+                "Увімкніть і поспостерігайте: якщо станція почне перезавантажуватися — вимкніть.",
             )
 
-    # --- поиск ------------------------------------------------------------
+    # --- пошук ------------------------------------------------------------
 
     def _discover(self) -> None:
         self.find_btn.setEnabled(False)
-        self.find_btn.setText("Ищу…")
+        self.find_btn.setText("Шукаю…")
         port = self.port.value()
         bind = port if self.bind.isChecked() else None
 
@@ -148,15 +148,15 @@ class SettingsDialog(QDialog):
 
     def _on_discovered(self, found: list[DeviceInfo], error: str) -> None:
         self.find_btn.setEnabled(True)
-        self.find_btn.setText("Найти в сети")
+        self.find_btn.setText("Знайти в мережі")
         self.found.clear()
         if error or not found:
             QMessageBox.information(
-                self, "Поиск станций",
-                (f"Ошибка: {error}\n\n" if error else "Станции не найдены.\n\n")
-                + "Проверьте, что Open API включён в приложении Marstek, компьютер в той же "
-                "сети и брандмауэр Windows разрешает Python входящие соединения в частной сети. "
-                "Можно ввести IP вручную — его видно в приложении или в роутере.",
+                self, "Пошук станцій",
+                (f"Помилка: {error}\n\n" if error else "Станції не знайдено.\n\n")
+                + "Перевірте, що Open API ввімкнено в застосунку Marstek, комп'ютер у тій самій "
+                "мережі, а брандмауер Windows дозволяє Python вхідні з'єднання в приватній мережі. "
+                "Можна ввести IP вручну — його видно в застосунку або в роутері.",
             )
             return
         for d in found:
@@ -167,14 +167,14 @@ class SettingsDialog(QDialog):
         if len(found) == 1:
             self.host.setText(found[0].host)
 
-    # --- сохранение ---------------------------------------------------------
+    # --- збереження ---------------------------------------------------------
 
     def _save(self) -> None:
         host = self.host.text().strip()
         try:
             ipaddress.IPv4Address(host)
         except ValueError:
-            QMessageBox.warning(self, "Настройки", "Укажите IPv4-адрес станции, например 192.168.1.50")
+            QMessageBox.warning(self, "Налаштування", "Вкажіть IPv4-адресу станції, наприклад 192.168.1.50")
             return
         self.cfg = replace(
             self.cfg,

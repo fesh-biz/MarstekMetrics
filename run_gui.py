@@ -1,4 +1,4 @@
-"""Запуск окна без установки пакета: python run_gui.py (также точка входа для PyInstaller)."""
+"""Запуск вікна без встановлення пакета: python run_gui.py (також точка входу для PyInstaller)."""
 
 import sys
 

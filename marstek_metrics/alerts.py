@@ -1,12 +1,12 @@
-"""Журнал ошибок и предупреждений.
+"""Журнал помилок і попереджень.
 
-Open API не отдаёт коды аварий станции, поэтому «ошибки» складываются из:
-- сбоев связи (таймауты, ошибки JSON-RPC, станция пропала из сети);
-- признаков неисправности в телеметрии (CT отключён, запрет заряда/разряда,
-  перегрев, слабый Wi-Fi, сброс счётчиков, невозможные значения).
+Open API не віддає коди аварій станції, тому «помилки» складаються з:
+- збоїв зв'язку (тайм-аути, помилки JSON-RPC, станція зникла з мережі);
+- ознак несправності в телеметрії (CT відключено, заборона заряджання/розряджання,
+  перегрів, слабкий Wi-Fi, скидання лічильників, неможливі значення).
 
-Каждое условие пишется в журнал дважды: когда возникло и когда прошло, —
-чтобы журнал не засорялся повторами каждые 30 секунд.
+Кожна умова пишеться в журнал двічі: коли виникла і коли минула, —
+щоб журнал не засмічувався повторами кожні 30 секунд.
 """
 
 from __future__ import annotations
@@ -15,10 +15,10 @@ import time
 from dataclasses import dataclass, field
 
 from .config import AppConfig
-from .models import MODE_TITLES_RU, DeviceInfo, Telemetry
+from .models import MODE_TITLES_UK, DeviceInfo, Telemetry
 
 INFO, WARNING, ERROR = "info", "warning", "error"
-LEVEL_RU = {INFO: "Инфо", WARNING: "Внимание", ERROR: "Ошибка"}
+LEVEL_UK = {INFO: "Інфо", WARNING: "Увага", ERROR: "Помилка"}
 
 
 @dataclass
@@ -35,7 +35,7 @@ class Event:
     code: str
     message: str
     ts: float = field(default_factory=time.time)
-    resolved: bool = False  # True — запись о том, что проблема прошла
+    resolved: bool = False  # True — запис про те, що проблема минула
 
 
 class AlertEngine:
@@ -49,7 +49,7 @@ class AlertEngine:
         self.info: DeviceInfo | None = None
         self.unsupported: set[str] = set()
 
-    # --- подъём / снятие условий ----------------------------------------
+    # --- підняття / зняття умов ----------------------------------------
 
     def _raise(self, code: str, level: str, message: str) -> list[Event]:
         if code in self.active:
@@ -67,41 +67,41 @@ class AlertEngine:
     def _cond(self, on: bool, code: str, level: str, msg_on: str, msg_off: str) -> list[Event]:
         return self._raise(code, level, msg_on) if on else self._clear(code, msg_off)
 
-    # --- связь ---------------------------------------------------------
+    # --- зв'язок ---------------------------------------------------------
 
     def on_cycle(self, ok_methods: list[str], errors: list[CommError]) -> list[Event]:
         out: list[Event] = []
         for m in ok_methods:
             self.fail_streak[m] = 0
-            out += self._clear(f"comm:{m}", f"{m}: связь восстановлена")
+            out += self._clear(f"comm:{m}", f"{m}: зв'язок відновлено")
         for e in errors:
             if e.kind == "rpc" and e.code == -32601:
                 if e.method not in self.unsupported:
                     self.unsupported.add(e.method)
                     out.append(Event(INFO, f"unsupported:{e.method}",
-                                     f"{e.method} не поддерживается этой прошивкой"))
+                                     f"{e.method} не підтримується цією прошивкою"))
                 continue
             n = self.fail_streak.get(e.method, 0) + 1
             self.fail_streak[e.method] = n
             if e.kind == "rpc":
-                out.append(Event(WARNING, f"rpc:{e.method}", f"Станция вернула ошибку: {e.message}"))
+                out.append(Event(WARNING, f"rpc:{e.method}", f"Станція повернула помилку: {e.message}"))
             elif n >= 2:
                 out += self._raise(f"comm:{e.method}", WARNING,
-                                   f"{e.method}: нет ответа {n} раза подряд")
+                                   f"{e.method}: немає відповіді {n} рази поспіль")
 
         if ok_methods:
             self.dead_cycles = 0
             if self.offline:
                 self.offline = False
-                out += self._clear("offline", "Станция снова на связи")
+                out += self._clear("offline", "Станція знову на зв'язку")
         elif errors:
             self.dead_cycles += 1
             if self.dead_cycles >= self.cfg.offline_after and not self.offline:
                 self.offline = True
                 out += self._raise(
                     "offline", ERROR,
-                    f"Станция не отвечает {self.dead_cycles} циклов подряд — "
-                    "проверьте питание, Wi-Fi и включён ли Open API",
+                    f"Станція не відповідає {self.dead_cycles} циклів поспіль — "
+                    "перевірте живлення, Wi-Fi і чи ввімкнено Open API",
                 )
         return out
 
@@ -110,16 +110,16 @@ class AlertEngine:
         prev = self.info
         self.info = info
         if prev is None:
-            out.append(Event(INFO, "device", f"Подключено: {info.title} ({info.model}), прошивка {info.ver}"))
+            out.append(Event(INFO, "device", f"Підключено: {info.title} ({info.model}), прошивка {info.ver}"))
             if not info.profile.supported:
                 out.append(Event(WARNING, "device:unsupported",
-                                 f"Модель {info.model} не поддерживается или работает с Open API нестабильно"))
+                                 f"Модель {info.model} не підтримується або працює з Open API нестабільно"))
         elif prev.ver != info.ver:
-            out.append(Event(INFO, "firmware", f"Прошивка изменилась: {prev.ver} → {info.ver}. "
-                             "Проверьте, что Open API всё ещё включён"))
+            out.append(Event(INFO, "firmware", f"Прошивка змінилася: {prev.ver} → {info.ver}. "
+                             "Перевірте, що Open API досі ввімкнено"))
         return out
 
-    # --- телеметрия ----------------------------------------------------
+    # --- телеметрія ----------------------------------------------------
 
     def on_telemetry(self, t: Telemetry) -> list[Event]:
         cfg = self.cfg
@@ -128,45 +128,45 @@ class AlertEngine:
 
         if t.ct_connected is not None:
             out += self._cond(not t.ct_connected, "ct", WARNING,
-                              "CT-счётчик не подключён — расход дома посчитать нельзя",
-                              "CT-счётчик снова на связи")
+                              "CT-лічильник не підключено — споживання будинку порахувати неможливо",
+                              "CT-лічильник знову на зв'язку")
         if t.soc is not None:
             out += self._cond(t.soc <= cfg.soc_low, "soc_low", WARNING,
-                              f"Низкий заряд батареи: {t.soc:.0f}%",
-                              f"Заряд восстановился: {t.soc:.0f}%")
+                              f"Низький заряд батареї: {t.soc:.0f}%",
+                              f"Заряд відновився: {t.soc:.0f}%")
         if t.rssi is not None:
             out += self._cond(t.rssi <= cfg.rssi_low, "wifi", WARNING,
-                              f"Слабый сигнал Wi-Fi: {t.rssi:.0f} dBm — возможны потери связи",
-                              f"Сигнал Wi-Fi в норме: {t.rssi:.0f} dBm")
+                              f"Слабкий сигнал Wi-Fi: {t.rssi:.0f} dBm — можливі втрати зв'язку",
+                              f"Сигнал Wi-Fi у нормі: {t.rssi:.0f} dBm")
         if t.bat_temp is not None:
             out += self._cond(t.bat_temp >= cfg.temp_high, "temp_high", ERROR,
-                              f"Перегрев батареи: {t.bat_temp:.1f} °C",
-                              f"Температура батареи в норме: {t.bat_temp:.1f} °C")
+                              f"Перегрів батареї: {t.bat_temp:.1f} °C",
+                              f"Температура батареї в нормі: {t.bat_temp:.1f} °C")
             out += self._cond(t.bat_temp <= 0, "temp_low", WARNING,
-                              f"Батарея переохлаждена: {t.bat_temp:.1f} °C — заряд может быть ограничен",
-                              f"Температура батареи в норме: {t.bat_temp:.1f} °C")
+                              f"Батарея переохолоджена: {t.bat_temp:.1f} °C — заряджання може бути обмежене",
+                              f"Температура батареї в нормі: {t.bat_temp:.1f} °C")
         if t.charge_allowed is not None:
             out += self._cond(not t.charge_allowed, "charge_blocked", WARNING,
-                              "BMS запретила заряд батареи", "Заряд батареи снова разрешён")
+                              "BMS заборонила заряджання батареї", "Заряджання батареї знову дозволено")
         if t.discharge_allowed is not None:
             out += self._cond(not t.discharge_allowed, "discharge_blocked", WARNING,
-                              "BMS запретила разряд батареи", "Разряд батареи снова разрешён")
+                              "BMS заборонила розряджання батареї", "Розряджання батареї знову дозволено")
 
-        bad = [name for name, v in (("станция", t.station_power), ("сеть", t.grid_power),
+        bad = [name for name, v in (("станція", t.station_power), ("мережа", t.grid_power),
                                      ("батарея", t.battery_power)) if v is not None and abs(v) > 10_000]
         if t.soc is not None and not 0 <= t.soc <= 100:
             bad.append("заряд")
         out += self._cond(bool(bad), "implausible", WARNING,
-                          "Подозрительные значения: " + ", ".join(bad),
-                          "Значения снова правдоподобны")
+                          "Підозрілі значення: " + ", ".join(bad),
+                          "Значення знову правдоподібні")
 
         if prev is not None:
             if prev.mode and t.mode and prev.mode != t.mode:
                 out.append(Event(INFO, "mode", "Режим: {} → {}".format(
-                    MODE_TITLES_RU.get(prev.mode, prev.mode), MODE_TITLES_RU.get(t.mode, t.mode))))
-            for name, a, b in (("взято из сети", prev.grid_input_wh, t.grid_input_wh),
-                               ("отдано станцией", prev.grid_output_wh, t.grid_output_wh)):
+                    MODE_TITLES_UK.get(prev.mode, prev.mode), MODE_TITLES_UK.get(t.mode, t.mode))))
+            for name, a, b in (("взято з мережі", prev.grid_input_wh, t.grid_input_wh),
+                               ("віддано станцією", prev.grid_output_wh, t.grid_output_wh)):
                 if a is not None and b is not None and b < a - 1:
                     out.append(Event(WARNING, "counter_reset",
-                                     f"Счётчик «{name}» уменьшился ({a:.0f} → {b:.0f} Wh): сброс или перезагрузка станции"))
+                                     f"Лічильник «{name}» зменшився ({a:.0f} → {b:.0f} Wh): скидання або перезавантаження станції"))
         return out

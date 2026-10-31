@@ -1,4 +1,4 @@
-"""Высокоуровневые вызовы Open API для одной станции."""
+"""Високорівневі виклики Open API для однієї станції."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ class MarstekDevice:
 def discover(
     transport: UdpTransport, port: int = DEFAULT_PORT, listen: float = 3.0
 ) -> list[DeviceInfo]:
-    """Найти станции в локальной сети широковещательным Marstek.GetDevice."""
+    """Знайти станції в локальній мережі широкомовним Marstek.GetDevice."""
     replies = transport.broadcast(
         "Marstek.GetDevice",
         {"ble_mac": "0"},

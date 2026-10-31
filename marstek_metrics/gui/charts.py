@@ -1,4 +1,4 @@
-"""Графики на pyqtgraph."""
+"""Графіки на pyqtgraph."""
 
 from __future__ import annotations
 
@@ -24,14 +24,14 @@ def _style_plot(w: pg.PlotWidget) -> None:
 
 
 SERIES = (
-    ("house_power", "Потребление дома", theme.HOUSE),
-    ("grid_power", "Сеть (+ импорт / − экспорт)", theme.GRID),
-    ("station_power", "Станция (+ отдаёт / − заряд)", theme.STATION),
+    ("house_power", "Споживання будинку", theme.HOUSE),
+    ("grid_power", "Мережа (+ імпорт / − експорт)", theme.GRID),
+    ("station_power", "Станція (+ віддає / − заряджання)", theme.STATION),
 )
 
 
 class PowerChart(pg.PlotWidget):
-    """Мощности во времени. Разрывы в данных не соединяются линией."""
+    """Потужності в часі. Розриви в даних не з'єднуються лінією."""
 
     def __init__(self) -> None:
         super().__init__(axisItems={"bottom": pg.DateAxisItem(orientation="bottom")})
@@ -66,18 +66,18 @@ class PowerChart(pg.PlotWidget):
 
 
 class DailyBars(pg.PlotWidget):
-    """Расход по дням: потребление дома и взятое из сети, кВт·ч."""
+    """Споживання за днями: споживання будинку та взяте з мережі, кВт·год."""
 
     def __init__(self) -> None:
         super().__init__()
         _style_plot(self)
-        self.setLabel("left", "кВт·ч")
+        self.setLabel("left", "кВт·год")
         self.setMouseEnabled(x=False, y=False)
         self.legend = self.addLegend(offset=(10, 5), labelTextColor=theme.colors()["muted"])
         self.house = pg.BarGraphItem(x=[0], height=[0], width=0.38, brush=theme.HOUSE,
-                                     pen=pg.mkPen(None), name="Потребление дома")
+                                     pen=pg.mkPen(None), name="Споживання будинку")
         self.grid = pg.BarGraphItem(x=[0], height=[0], width=0.38, brush=theme.GRID,
-                                    pen=pg.mkPen(None), name="Взято из сети")
+                                    pen=pg.mkPen(None), name="Взято з мережі")
         self.addItem(self.house)
         self.addItem(self.grid)
 

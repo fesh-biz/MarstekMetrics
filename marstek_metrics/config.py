@@ -1,4 +1,4 @@
-"""Настройки программы (JSON в папке пользователя)."""
+"""Налаштування програми (JSON у теці користувача)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 
 def data_dir() -> Path:
-    """Папка для настроек, базы и логов."""
+    """Тека для налаштувань, бази та логів."""
     override = os.environ.get("MARSTEK_METRICS_HOME")
     if override:
         base = Path(override)
@@ -29,16 +29,16 @@ def data_dir() -> Path:
 class AppConfig:
     host: str = ""
     port: int = 30000
-    interval: int = 30            # секунд между циклами опроса
-    request_gap: float = 1.0      # пауза между запросами внутри цикла
+    interval: int = 30            # секунд між циклами опитування
+    request_gap: float = 1.0      # пауза між запитами всередині циклу
     timeout: float = 10.0
     retries: int = 2
-    bind_device_port: bool = True # слушать ответы на порту станции
-    read_battery: bool = False    # Bat.GetStatus: на части прошивок перезагружает станцию
-    soc_low: int = 10             # % — предупреждение о низком заряде
-    rssi_low: int = -80           # dBm — слабый Wi-Fi
-    temp_high: int = 45           # °C — перегрев батареи
-    offline_after: int = 3        # циклов без ответа → «станция не отвечает»
+    bind_device_port: bool = True # слухати відповіді на порту станції
+    read_battery: bool = False    # Bat.GetStatus: на частині прошивок перезавантажує станцію
+    soc_low: int = 10             # % — попередження про низький заряд
+    rssi_low: int = -80           # dBm — слабкий Wi-Fi
+    temp_high: int = 45           # °C — перегрів батареї
+    offline_after: int = 3        # циклів без відповіді → «станція не відповідає»
     retention_days: int = 365
 
     @classmethod
@@ -53,7 +53,7 @@ class AppConfig:
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
-            log.warning("Не удалось прочитать %s: %s", path, exc)
+            log.warning("Не вдалося прочитати %s: %s", path, exc)
             return cls()
         known = {f.name: f.type for f in fields(cls)}
         cfg = cls()

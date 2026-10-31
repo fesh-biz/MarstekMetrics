@@ -1,10 +1,10 @@
-"""Модели данных и нормализация ответов станции.
+"""Моделі даних і нормалізація відповідей станції.
 
-Соглашение о знаках внутри программы:
-- station_power  (ongrid_power): + станция отдаёт в домашнюю сеть, − берёт из неё (заряд);
-- battery_power: + батарея заряжается, − разряжается (знак Open API);
-- grid_power     (CT total_power): + дом берёт из внешней сети (импорт), − отдаёт (экспорт);
-- house_power: потребление дома = grid_power + station_power + offgrid_power.
+Угода про знаки всередині програми:
+- station_power  (ongrid_power): + станція віддає в домашню мережу, − бере з неї (заряджання);
+- battery_power: + батарея заряджається, − розряджається (знак Open API);
+- grid_power     (CT total_power): + будинок бере із зовнішньої мережі (імпорт), − віддає (експорт);
+- house_power: споживання будинку = grid_power + station_power + offgrid_power.
 """
 
 from __future__ import annotations
@@ -15,22 +15,22 @@ from dataclasses import asdict, dataclass, field, fields
 from typing import Any
 
 MODE_NAMES = {0: "Auto", 1: "AI", 2: "Manual", 3: "Passive", 4: "UPS"}
-MODE_TITLES_RU = {
+MODE_TITLES_UK = {
     "Auto": "Авто",
     "AI": "AI",
-    "Manual": "Расписание",
-    "Passive": "Пассивный",
-    "UPS": "ИБП",
+    "Manual": "Розклад",
+    "Passive": "Пасивний",
+    "UPS": "ДБЖ",
 }
 
 
-# --- модель и прошивка ---------------------------------------------------
+# --- модель і прошивка ---------------------------------------------------
 
 
 def device_family(model: str | None) -> str:
-    """Семейство по строке device из Marstek.GetDevice.
+    """Сімейство за рядком device з Marstek.GetDevice.
 
-    Возвращает: venus_a, venus_c, venus_d, venus_e, venus_e_mini, venus_e2, unknown.
+    Повертає: venus_a, venus_c, venus_d, venus_e, venus_e_mini, venus_e2, unknown.
     """
     if not model:
         return "unknown"
@@ -57,13 +57,13 @@ FAMILY_TITLES = {
     "venus_e": "Venus E 3.0",
     "venus_e_mini": "Venus E mini",
     "venus_e2": "Venus E 2.0",
-    "unknown": "Неизвестная модель",
+    "unknown": "Невідома модель",
 }
 
 
 @dataclass(frozen=True)
 class Profile:
-    """Что умеет станция и в каких единицах отдаёт счётчики."""
+    """Що вміє станція і в яких одиницях віддає лічильники."""
 
     family: str
     ver: int | None
@@ -74,7 +74,7 @@ class Profile:
 
     @property
     def em_energy_scale(self) -> float | None:
-        """Множитель EM input/output_energy → Wh (None — не доверять полям)."""
+        """Множник EM input/output_energy → Wh (None — не довіряти полям)."""
         if self.ver is None:
             return None
         if self.family == "venus_c" and self.ver >= 155:
@@ -85,7 +85,7 @@ class Profile:
 
     @property
     def pv_energy_scale(self) -> float:
-        """Множитель total_pv_energy → Wh."""
+        """Множник total_pv_energy → Wh."""
         if self.ver is None or not self.has_pv:
             return 1.0
         if self.family == "venus_a" and self.ver >= 149:
@@ -139,12 +139,12 @@ class DeviceInfo:
         )
 
 
-# --- телеметрия ------------------------------------------------------------
+# --- телеметрія ------------------------------------------------------------
 
 
 @dataclass
 class Telemetry:
-    """Один срез состояния станции (уже в единицах W / Wh / % / °C)."""
+    """Один зріз стану станції (вже в одиницях W / Wh / % / °C)."""
 
     ts: float = field(default_factory=time.time)
     soc: float | None = None
@@ -188,10 +188,10 @@ class Telemetry:
         if self.battery_power is None:
             return "—"
         if self.battery_power > 5:
-            return "заряд"
+            return "заряджання"
         if self.battery_power < -5:
-            return "разряд"
-        return "ожидание"
+            return "розряджання"
+        return "очікування"
 
 
 def _num(value: Any) -> float | None:
@@ -242,7 +242,7 @@ def apply_es_status(t: Telemetry, r: dict[str, Any], profile: Profile) -> None:
     t.pv_power = pv
     bat = _num(r.get("bat_power"))
     if bat is None and t.station_power is not None:
-        # Venus E 3.0 часто не присылает bat_power: считаем по балансу мощностей
+        # Venus E 3.0 часто не надсилає bat_power: рахуємо за балансом потужностей
         bat = (pv or 0.0) - t.station_power - (t.offgrid_power or 0.0)
         t.battery_power_derived = True
     t.battery_power = bat
@@ -277,8 +277,8 @@ def apply_es_mode(t: Telemetry, r: dict[str, Any]) -> None:
         t.station_power = _num(r.get("ongrid_power"))
     if t.offgrid_power is None:
         t.offgrid_power = _num(r.get("offgrid_power"))
-    # CT-поля в ES.GetMode на fw 150 бывают нулями при живом счётчике —
-    # берём их, только если EM.GetStatus ничего не дал и CT отмечен подключённым.
+    # CT-поля в ES.GetMode на fw 150 бувають нулями при живому лічильнику —
+    # беремо їх, лише якщо EM.GetStatus нічого не дав і CT позначено підключеним.
     if t.grid_power is None and _num(r.get("ct_state")) == 1:
         t.ct_connected = True
         t.grid_power = _num(r.get("total_power"))
@@ -294,7 +294,7 @@ def apply_wifi(t: Telemetry, r: dict[str, Any]) -> None:
 def apply_battery(t: Telemetry, r: dict[str, Any]) -> None:
     temp = _num(r.get("bat_temp"))
     if temp is not None and temp > 100:
-        temp = temp / 10.0  # старые BMS отдают температуру ×10
+        temp = temp / 10.0  # старі BMS віддають температуру ×10
     t.bat_temp = temp
     t.charge_allowed = _bool(r.get("charg_flag"))
     t.discharge_allowed = _bool(r.get("dischrg_flag"))
@@ -303,6 +303,6 @@ def apply_battery(t: Telemetry, r: dict[str, Any]) -> None:
 
 
 def finalize(t: Telemetry) -> None:
-    """Посчитать производные величины."""
+    """Обчислити похідні величини."""
     if t.ct_connected and t.grid_power is not None and t.station_power is not None:
         t.house_power = t.grid_power + t.station_power + (t.offgrid_power or 0.0)

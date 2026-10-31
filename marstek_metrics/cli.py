@@ -1,6 +1,6 @@
-"""Консольная утилита для проверки связи со станцией.
+"""Консольна утиліта для перевірки зв'язку зі станцією.
 
-Примеры:
+Приклади:
   marstek-cli discover
   marstek-cli status 192.168.1.50
   marstek-cli raw 192.168.1.50 ES.GetStatus
@@ -27,11 +27,11 @@ def _transport(args: argparse.Namespace) -> UdpTransport:
 
 def cmd_discover(args: argparse.Namespace) -> int:
     with _transport(args) as tr:
-        print(f"Ищу станции (UDP {args.port}, локальный порт {tr.local_port})…")
+        print(f"Шукаю станції (UDP {args.port}, локальний порт {tr.local_port})…")
         found = discover(tr, args.port, listen=args.listen)
     if not found:
-        print("Ничего не найдено. Проверьте, что Open API включён в приложении Marstek, "
-              "компьютер в той же сети, а брандмауэр Windows пропускает Python.")
+        print("Нічого не знайдено. Перевірте, що Open API ввімкнено в застосунку Marstek, "
+              "комп'ютер у тій самій мережі, а брандмауер Windows пропускає Python.")
         return 1
     for d in found:
         print(f"{d.host:15}  {d.title:13}  model={d.model}  ver={d.ver}  ble_mac={d.ble_mac}")
@@ -46,24 +46,24 @@ def cmd_status(args: argparse.Namespace) -> int:
         tel, errors = collect_once(dev, info.profile, slow=True, battery=args.battery)
     rows = [
         ("Заряд", tel.soc, "%"),
-        ("Потребление дома", tel.house_power, "W"),
-        ("Сеть (CT, + импорт)", tel.grid_power, "W"),
-        ("Станция → дом (+) / заряд (−)", tel.station_power, "W"),
-        ("Батарея (+ заряд)", tel.battery_power, "W"),
-        ("Off-grid выход", tel.offgrid_power, "W"),
-        ("CT подключён", tel.ct_connected, ""),
+        ("Споживання будинку", tel.house_power, "W"),
+        ("Мережа (CT, + імпорт)", tel.grid_power, "W"),
+        ("Станція → будинок (+) / заряджання (−)", tel.station_power, "W"),
+        ("Батарея (+ заряджання)", tel.battery_power, "W"),
+        ("Off-grid вихід", tel.offgrid_power, "W"),
+        ("CT підключено", tel.ct_connected, ""),
         ("Режим", tel.mode, ""),
-        ("Всего взято из сети", tel.grid_input_wh, "Wh"),
-        ("Всего отдано", tel.grid_output_wh, "Wh"),
+        ("Усього взято з мережі", tel.grid_input_wh, "Wh"),
+        ("Усього віддано", tel.grid_output_wh, "Wh"),
         ("Wi-Fi", tel.rssi, "dBm"),
     ]
     if args.battery:
-        rows.append(("Температура батареи", tel.bat_temp, "°C"))
+        rows.append(("Температура батареї", tel.bat_temp, "°C"))
     for name, value, unit in rows:
         if value is None:
             shown = "—"
         elif isinstance(value, bool):
-            shown = "да" if value else "нет"
+            shown = "так" if value else "ні"
         elif isinstance(value, float):
             shown = f"{value:g} {unit}"
         else:
@@ -98,31 +98,31 @@ def cmd_raw(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="marstek-cli", description="Проверка Marstek Open API")
-    ap.add_argument("--port", type=int, default=DEFAULT_PORT, help="UDP-порт станции")
+    ap = argparse.ArgumentParser(prog="marstek-cli", description="Перевірка Marstek Open API")
+    ap.add_argument("--port", type=int, default=DEFAULT_PORT, help="UDP-порт станції")
     ap.add_argument("--timeout", type=float, default=10.0)
     ap.add_argument("--retries", type=int, default=2)
     ap.add_argument("--random-port", action="store_true",
-                    help="не биндить локальный сокет на порт станции")
-    ap.add_argument("-v", "--verbose", action="store_true", help="показывать пакеты")
+                    help="не прив'язувати локальний сокет до порту станції")
+    ap.add_argument("-v", "--verbose", action="store_true", help="показувати пакети")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    d = sub.add_parser("discover", help="найти станции в сети")
+    d = sub.add_parser("discover", help="знайти станції в мережі")
     d.add_argument("--listen", type=float, default=3.0)
     d.set_defaults(func=cmd_discover)
 
-    s = sub.add_parser("status", help="текущее состояние")
+    s = sub.add_parser("status", help="поточний стан")
     s.add_argument("host")
     s.add_argument("--battery", action="store_true",
-                   help="запросить Bat.GetStatus (на части прошивок перезагружает станцию)")
+                   help="запитати Bat.GetStatus (на частині прошивок перезавантажує станцію)")
     s.set_defaults(func=cmd_status)
 
-    r = sub.add_parser("raw", help="сырой ответ метода (или all)")
+    r = sub.add_parser("raw", help="сира відповідь методу (або all)")
     r.add_argument("host")
     r.add_argument("method")
-    r.add_argument("--params", help='JSON, например {"id":0}')
-    r.add_argument("--gap", type=float, default=1.0, help="пауза между запросами, c")
-    r.add_argument("--battery", action="store_true", help="включить Bat.GetStatus в all")
+    r.add_argument("--params", help='JSON, наприклад {"id":0}')
+    r.add_argument("--gap", type=float, default=1.0, help="пауза між запитами, с")
+    r.add_argument("--battery", action="store_true", help="додати Bat.GetStatus до all")
     r.set_defaults(func=cmd_raw)
 
     args = ap.parse_args(argv)
@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.func(args)
     except MarstekError as exc:
-        print(f"Ошибка: {exc}", file=sys.stderr)
+        print(f"Помилка: {exc}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:
         return 130
