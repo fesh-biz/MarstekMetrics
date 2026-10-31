@@ -17,11 +17,11 @@ import time
 
 from .device import READ_METHODS, MarstekDevice, discover
 from .poller import collect_once
-from .protocol import DEFAULT_PORT, MarstekError, UdpTransport
+from .protocol import DEFAULT_PORT, MarstekError, UdpTransport, local_bind_port
 
 
 def _transport(args: argparse.Namespace) -> UdpTransport:
-    bind = None if args.random_port else args.port
+    bind = local_bind_port(getattr(args, "host", ""), args.port, not args.random_port)
     return UdpTransport(bind_port=bind, timeout=args.timeout, retries=args.retries)
 
 

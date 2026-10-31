@@ -22,7 +22,7 @@ from .models import (
     apply_wifi,
     finalize,
 )
-from .protocol import MarstekError, MarstekRpcError, MarstekTimeout, UdpTransport
+from .protocol import MarstekError, MarstekRpcError, MarstekTimeout, UdpTransport, local_bind_port
 from .storage import Storage
 
 log = logging.getLogger(__name__)
@@ -107,14 +107,14 @@ class Poller(threading.Thread):
         self.on_events = on_events or (lambda e: None)
         self.on_device = on_device or (lambda d: None)
         self.on_status = on_status or (lambda s: None)
-        self._stop = threading.Event()
+        self._stop_event = threading.Event()
         self._wake = threading.Event()
         self.info: DeviceInfo | None = None
         self._transport: UdpTransport | None = None
 
     def stop(self) -> None:
         """Зупинити опитування. Закриття сокета перериває очікування відповіді."""
-        self._stop.set()
+        self._stop_event.set()
         self._wake.set()
         if self._transport is not None:
             try:
@@ -135,7 +135,7 @@ class Poller(threading.Thread):
         alerts = AlertEngine(cfg)
         try:
             transport = UdpTransport(
-                bind_port=cfg.port if cfg.bind_device_port else None,
+                bind_port=local_bind_port(cfg.host, cfg.port, cfg.bind_device_port),
                 timeout=cfg.timeout,
                 retries=cfg.retries,
             )
@@ -151,7 +151,7 @@ class Poller(threading.Thread):
         try:
             self._loop(transport, storage, alerts)
         except OSError:
-            if not self._stop.is_set():
+            if not self._stop_event.is_set():
                 log.exception("Збій опитування")
                 self.on_status("Помилка мережі")
         finally:
@@ -164,7 +164,7 @@ class Poller(threading.Thread):
         cycle = 0
         last_device_check = 0.0
         last_prune = 0.0
-        while not self._stop.is_set():
+        while not self._stop_event.is_set():
             started = time.monotonic()
             events: list[Event] = []
 
@@ -194,9 +194,9 @@ class Poller(threading.Thread):
                 gap=cfg.request_gap,
                 skip=alerts.unsupported,
                 ok=ok,
-                stop=self._stop,
+                stop=self._stop_event,
             )
-            if self._stop.is_set():
+            if self._stop_event.is_set():
                 break
             events += alerts.on_cycle(ok, errors)
             if ok:

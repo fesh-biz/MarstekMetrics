@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import socket
@@ -280,6 +281,24 @@ class UdpTransport:
                     if msg and isinstance(msg.get("result"), dict):
                         found[src_host] = msg
         return list(found.items())
+
+
+def local_bind_port(host: str, port: int, bind_device_port: bool = True) -> int | None:
+    """Який локальний порт займати для роботи зі станцією host:port.
+
+    Для станції в мережі — той самий порт, що в станції (частина прошивок
+    відповідає саме на нього). Для 127.0.0.1 (емулятор на цьому ж комп'ютері)
+    — випадковий: на Windows обидва сокети могли б зайняти один порт, і
+    відповіді емулятора поверталися б йому самому.
+    """
+    if not bind_device_port:
+        return None
+    try:
+        if ipaddress.ip_address(host).is_loopback:
+            return None
+    except ValueError:
+        pass
+    return port
 
 
 def _parse(data: bytes) -> dict[str, Any] | None:

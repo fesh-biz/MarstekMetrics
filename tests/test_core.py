@@ -1,4 +1,5 @@
 import datetime as dt
+import socket
 import threading
 import time
 
@@ -21,7 +22,7 @@ from marstek_metrics.models import (
     normalize_mode,
 )
 from marstek_metrics.poller import Poller, collect_once
-from marstek_metrics.protocol import MarstekRpcError, MarstekTimeout, UdpTransport
+from marstek_metrics.protocol import MarstekRpcError, MarstekTimeout, UdpTransport, local_bind_port
 from marstek_metrics.storage import Storage
 
 
@@ -90,12 +91,22 @@ def test_retry_recovers_after_drop(transport):
 
 
 def test_bind_fallback_when_port_busy(mock):
-    tr = UdpTransport(bind_port=mock.port, timeout=0.5)
+    blocker = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    blocker.bind(("0.0.0.0", 0))
+    busy = blocker.getsockname()[1]
+    tr = UdpTransport(bind_port=busy, timeout=0.5)
     try:
-        assert tr.local_port != mock.port
+        assert tr.local_port != busy
         MarstekDevice(tr, mock.host, mock.port).get_device()
     finally:
         tr.close()
+        blocker.close()
+
+
+def test_local_bind_port():
+    assert local_bind_port("192.168.1.50", 30000) == 30000
+    assert local_bind_port("127.0.0.1", 30000) is None
+    assert local_bind_port("192.168.1.50", 30000, bind_device_port=False) is None
 
 
 def test_discover_broadcast_addresses(mock, transport):
