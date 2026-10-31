@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "marstek-metrics"
+version = "0.1.0"
+description = "Мониторинг станций Marstek Venus через локальный Open API"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "PySide6-Essentials>=6.6",
+    "pyqtgraph>=0.13.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pyinstaller>=6"]
+
+[project.scripts]
+marstek-cli = "marstek_metrics.cli:main"
+
+[project.gui-scripts]
+marstek-metrics = "marstek_metrics.gui.app:main"
+
+[tool.setuptools.packages.find]
+include = ["marstek_metrics*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
