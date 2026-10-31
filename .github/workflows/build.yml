@@ -1,0 +1,43 @@
+name: Збирання Windows
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Встановити залежності
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Тести (разом із тестом вікна)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pytest -v
+
+      - name: Зібрати MarstekMetrics.exe
+        run: pyinstaller --noconfirm --clean --windowed --onefile --name MarstekMetrics run_gui.py
+
+      - name: Опублікувати реліз «latest»
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest dist/MarstekMetrics.exe \
+            --target "$GITHUB_SHA" \
+            --title "Marstek Metrics — остання збірка" \
+            --notes "Завантажте MarstekMetrics.exe і запустіть. Python не потрібен. Збірка з коміту ${GITHUB_SHA::7}."

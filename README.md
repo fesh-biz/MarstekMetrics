@@ -19,20 +19,30 @@
 
 ## Встановлення (Windows)
 
-Потрібен Python 3.11+ з [python.org](https://www.python.org/downloads/). Під час встановлення позначте «Add python.exe to PATH».
+**[Завантажити MarstekMetrics.exe](https://github.com/fesh-biz/MarstekMetrics/releases/download/latest/MarstekMetrics.exe)** і запустити. Python не потрібен.
 
-```bat
+- Файл не підписаний, тому Windows SmartScreen може показати «Windows захистив ваш ПК» — натисніть «Докладніше» → «Виконати в будь-якому разі».
+- Перший запуск триває кілька секунд: програма розпаковується.
+- Під час першого запуску відкриються налаштування: натисніть «Знайти в мережі» або впишіть IP станції.
+- Якщо Windows запитає про брандмауер — дозвольте доступ у **приватних мережах**, інакше відповіді станції не дійдуть.
+
+Нова збірка з'являється автоматично після кожного оновлення коду.
+
+Запускайте безпосередньо у Windows, не у WSL2: частина прошивок відповідає на порт 30000, а NAT WSL2 такі відповіді не пропускає.
+
+### Встановлення з вихідного коду (для розробки)
+
+Потрібен Python 3.11+ з [python.org](https://www.python.org/downloads/).
+
+```powershell
 git clone https://github.com/fesh-biz/MarstekMetrics.git
 cd MarstekMetrics
 py -m venv .venv
-.venv\Scripts\activate
-pip install -e .
-marstek-metrics
+.venv\Scripts\python -m pip install -e .[dev]
+.venv\Scripts\marstek-metrics
 ```
 
-Під час першого запуску відкриються налаштування: натисніть «Знайти в мережі» або впишіть IP станції. Якщо Windows запитає про брандмауер — дозвольте доступ у **приватних мережах**, інакше відповіді станції не дійдуть.
-
-Запускайте безпосередньо у Windows, не у WSL2: частина прошивок відповідає на порт 30000, а NAT WSL2 такі відповіді не пропускає.
+Команди звертаються до `.venv\Scripts\` напряму, тож активація середовища (і зміна політики виконання PowerShell) не потрібна.
 
 ### Перевірка зв'язку з консолі
 
@@ -54,14 +64,13 @@ python -m marstek_metrics.mock
 
 У налаштуваннях програми вкажіть IP `127.0.0.1`.
 
-### Окремий .exe
+### Власне збирання .exe
 
-```bat
-pip install -e .[dev]
-build_exe.bat
+```powershell
+.venv\Scripts\pyinstaller --noconfirm --clean --windowed --onefile --name MarstekMetrics run_gui.py
 ```
 
-Вийде `dist\MarstekMetrics.exe`.
+Вийде `dist\MarstekMetrics.exe`. Те саме робить GitHub Actions (`.github/workflows/build.yml`) після кожного пушу в `main`: проганяє тести на Windows і оновлює реліз `latest`.
 
 ## Як рахується споживання
 
