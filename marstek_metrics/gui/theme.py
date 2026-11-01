@@ -52,11 +52,13 @@ def apply(app: QApplication) -> dict[str, str]:
         QLabel#stateValue {{ font-size: 13pt; }}
         QLabel#deviceTitle {{ font-size: 13pt; font-weight: 600; }}
         QLabel#muted {{ color: {c['muted']}; }}
-        QLabel#pill {{
-            border-radius: 10px; padding: 3px 10px; color: white; font-weight: 600;
-        }}
         QListWidget#journal {{ border: none; background: transparent; }}
         QListWidget#journal::item {{ padding: 4px 0; border-bottom: 1px solid {c['border']}; }}
+        QScrollBar:vertical {{ background: transparent; width: 8px; margin: 0; }}
+        QScrollBar::handle:vertical {{ background: {c['border']}; border-radius: 4px; min-height: 24px; }}
+        QScrollBar::handle:vertical:hover {{ background: {c['muted']}; }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
         QProgressBar {{
             border: none; border-radius: 5px; background: {c['border']}; max-height: 10px;
         }}

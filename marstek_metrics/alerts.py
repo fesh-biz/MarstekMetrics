@@ -126,10 +126,6 @@ class AlertEngine:
         out: list[Event] = []
         prev, self.last = self.last, t
 
-        if t.ct_connected is not None:
-            out += self._cond(not t.ct_connected, "ct", WARNING,
-                              "CT-лічильник не підключено — споживання будинку порахувати неможливо",
-                              "CT-лічильник знову на зв'язку")
         if t.soc is not None:
             out += self._cond(t.soc <= cfg.soc_low, "soc_low", WARNING,
                               f"Низький заряд батареї: {t.soc:.0f}%",

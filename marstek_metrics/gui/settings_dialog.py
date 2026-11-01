@@ -83,7 +83,7 @@ class SettingsDialog(QDialog):
         box = QGroupBox("Опитування")
         form = QFormLayout(box)
         self.interval = _spin(10, 3600, cfg.interval, " с")
-        self.interval.setToolTip("Опитування частіше ніж раз на 30 с може робити станцію нестабільною")
+        self.interval.setToolTip("Кожен цикл — один запит до станції. Рекомендовано 15–30 с; частіше ніж раз на 10 с не варто")
         form.addRow("Інтервал", self.interval)
         self.timeout = _spin(2, 60, int(cfg.timeout), " с")
         form.addRow("Очікування відповіді", self.timeout)

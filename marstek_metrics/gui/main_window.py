@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -27,11 +28,23 @@ from ..poller import Poller
 from ..storage import Storage
 from . import theme
 from .settings_dialog import SettingsDialog
-from .widgets import StatusPill
 
 # Нижче цієї потужності вважаємо, що батарея простоює
 IDLE_W = 5
 JOURNAL_LIMIT = 50
+# Події, які не показуємо в журналі
+HIDDEN_CODES = {"ct"}
+
+# Статус зв'язку: колір точки. «Опитування…» навмисно не показуємо,
+# щоб рядок не блимав кожні кілька секунд.
+STATUS_COLORS = {
+    "На зв'язку": "#16a34a",
+    "Підключення…": "#2563eb",
+    "Немає відповіді": "#d97706",
+    "Немає зв'язку": "#dc2626",
+    "Помилка мережі": "#dc2626",
+    "Зупинено": "#64748b",
+}
 
 CHARGE_COLOR = "#16a34a"
 DISCHARGE_COLOR = "#d97706"
@@ -61,6 +74,8 @@ def battery_text(t: Telemetry | None) -> tuple[str, str, str]:
 
 def is_problem(e: Event) -> bool:
     """Чи показувати запис у журналі помилок."""
+    if e.code in HIDDEN_CODES:
+        return False
     return e.resolved or e.level in ("error", "warning")
 
 
@@ -72,14 +87,15 @@ class MainWindow(QMainWindow):
         self.storage = Storage(self.db_path)
         self.poller: Poller | None = None
         self.info: DeviceInfo | None = None
-        self.last: Telemetry | None = None
+        self.last: Telemetry | None = self.storage.latest()
         self.active: dict[str, Event] = {}
+        self.status = "Зупинено"
 
         self.bridge = Bridge()
         self.bridge.telemetry.connect(self._on_telemetry)
         self.bridge.events.connect(self._on_events)
         self.bridge.device.connect(self._on_device)
-        self.bridge.status.connect(lambda s: self.pill.set_status(s))
+        self.bridge.status.connect(self._on_status)
 
         self.setWindowTitle(f"{APP_NAME} {__version__}")
         self.resize(420, 560)
@@ -115,11 +131,12 @@ class MainWindow(QMainWindow):
         self.device_title.setObjectName("deviceTitle")
         self.device_sub = QLabel("Відкрийте налаштування і вкажіть IP станції")
         self.device_sub.setObjectName("muted")
+        self.device_sub.setTextFormat(Qt.TextFormat.RichText)
+        # довжина тексту не повинна розсувати вікно
+        self.device_sub.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         col.addWidget(self.device_title)
         col.addWidget(self.device_sub)
         row.addLayout(col, 1)
-        self.pill = StatusPill()
-        row.addWidget(self.pill, 0, Qt.AlignmentFlag.AlignVCenter)
         settings = QPushButton("⚙")
         settings.setToolTip("Налаштування")
         settings.setFixedWidth(36)
@@ -197,14 +214,14 @@ class MainWindow(QMainWindow):
         )
         self.active.clear()
         self.poller.start()
-        self.device_sub.setText(f"{self.cfg.host} · підключення…")
+        self._on_status("Підключення…")
 
     def _stop_poller(self) -> None:
         if self.poller is not None:
             self.poller.stop()
             self.poller.join(timeout=3)
             self.poller = None
-        self.pill.set_status("Зупинено")
+        self._on_status("Зупинено")
 
     def _open_settings(self) -> None:
         dlg = SettingsDialog(self.cfg, self)
@@ -237,23 +254,40 @@ class MainWindow(QMainWindow):
         if "offline" in self.active:
             self._show_battery()
 
+    def _on_status(self, status: str) -> None:
+        if status in STATUS_COLORS:
+            self.status = status
+            self._tick()
+
     def _tick(self) -> None:
-        if self.info is not None:
-            when = fmt.ago(self.last.ts if self.last else None, time.time())
-            self.device_sub.setText(f"{self.info.host} · оновлено {when}")
+        if not self.cfg.host:
+            return
+        color = STATUS_COLORS.get(self.status, "#64748b")
+        text = f'<span style="color:{color}">●</span>&nbsp;{self.status}'
+        if self.last is not None:
+            text += f" · оновлено {fmt.ago(self.last.ts, time.time())}"
+        self.device_sub.setText(text)
+        self.device_sub.setToolTip(f"{self.cfg.host}:{self.cfg.port}")
+        self._show_battery()
 
     # --- відображення ---------------------------------------------------------
 
+    def _is_stale(self) -> bool:
+        """Останні дані надто старі, щоб показувати їх як поточний стан."""
+        if self.last is None:
+            return True
+        return time.time() - self.last.ts > max(120, self.cfg.interval * 4)
+
     def _show_battery(self) -> None:
         t = self.last
-        offline = "offline" in self.active
+        offline = "offline" in self.active or self._is_stale()
         soc = None if t is None else t.soc
         self.soc_label.setText(fmt.percent(soc))
         self.soc_bar.setValue(int(soc or 0))
 
         state, power, color = battery_text(None if offline else t)
-        if offline:
-            state = "Немає зв'язку"
+        if offline and t is not None:
+            state = "Немає свіжих даних"
         text = f'<span style="color:{color}">●</span>&nbsp;{state}'
         if power:
             text += f"&nbsp;&nbsp;<b>{power}</b>"

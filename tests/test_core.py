@@ -56,6 +56,22 @@ def test_get_device_and_status(mock, transport):
     assert tel.rssi is not None
 
 
+def test_fast_cycle_sends_one_request(mock, transport):
+    dev = MarstekDevice(transport, mock.host, mock.port)
+    profile = dev.get_device().profile
+    before = len(mock.requests)
+    tel, errors = collect_once(dev, profile, slow=False, gap=0)
+    assert errors == [] and tel.soc is not None and tel.battery_power is not None
+    assert [r["method"] for r in mock.requests[before:]] == ["ES.GetStatus"]
+
+
+def test_carry_slow_fields():
+    from marstek_metrics.poller import carry_slow_fields
+    t = Telemetry(soc=50)
+    carry_slow_fields(t, Telemetry(mode="Auto", ct_connected=False, rssi=-60))
+    assert (t.mode, t.ct_connected, t.rssi) == ("Auto", False, -60)
+
+
 def test_method_not_found(mock, transport):
     dev = MarstekDevice(transport, mock.host, mock.port)
     with pytest.raises(MarstekRpcError) as exc:
@@ -178,9 +194,9 @@ def test_alerts_raise_and_clear_once():
 def test_alerts_telemetry_conditions():
     eng = AlertEngine(AppConfig())
     ev = eng.on_telemetry(Telemetry(ct_connected=False, soc=5, rssi=-85, mode="Auto"))
-    assert {e.code for e in ev} == {"ct", "soc_low", "wifi"}
+    assert {e.code for e in ev} == {"soc_low", "wifi"}
     ev = eng.on_telemetry(Telemetry(ct_connected=True, soc=50, rssi=-60, mode="Manual"))
-    assert {e.code for e in ev} == {"ct", "soc_low", "wifi", "mode"}
+    assert {e.code for e in ev} == {"soc_low", "wifi", "mode"}
 
 
 def test_alerts_counter_reset_and_unsupported():

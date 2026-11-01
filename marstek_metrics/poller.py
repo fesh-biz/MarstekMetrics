@@ -27,7 +27,7 @@ from .storage import Storage
 
 log = logging.getLogger(__name__)
 
-SLOW_EVERY = 10          # Wi-Fi / батарея — раз на N циклів
+SLOW_EVERY = 10          # режим, CT, Wi-Fi, батарея — раз на N циклів
 DEVICE_EVERY_S = 3600    # Marstek.GetDevice — раз на годину
 PRUNE_EVERY_S = 86400
 
@@ -55,12 +55,14 @@ def collect_once(
     errors: list[CommError] = []
     ok = [] if ok is None else ok
     skip = skip or set()
+    # Кожен цикл — лише один запит (заряд і потужність батареї), решта рідше:
+    # так станція отримує мінімум запитів навіть за частого опитування.
     steps: list[tuple[str, Callable[[dict], None]]] = [
         ("ES.GetStatus", lambda r: apply_es_status(t, r, profile)),
-        ("EM.GetStatus", lambda r: apply_em_status(t, r, profile)),
-        ("ES.GetMode", lambda r: apply_es_mode(t, r)),
     ]
     if slow:
+        steps.append(("ES.GetMode", lambda r: apply_es_mode(t, r)))
+        steps.append(("EM.GetStatus", lambda r: apply_em_status(t, r, profile)))
         steps.append(("Wifi.GetStatus", lambda r: apply_wifi(t, r)))
         if battery:
             steps.append(("Bat.GetStatus", lambda r: apply_battery(t, r)))
@@ -82,6 +84,15 @@ def collect_once(
     t.ts = time.time()
     finalize(t)
     return t, errors
+
+
+def carry_slow_fields(t: Telemetry, prev: Telemetry | None) -> None:
+    """Режим, CT і Wi-Fi читаються рідше — між читаннями тримаємо останні значення."""
+    if prev is None:
+        return
+    for name in ("mode", "ct_connected", "rssi"):
+        if getattr(t, name) is None:
+            setattr(t, name, getattr(prev, name))
 
 
 class Poller(threading.Thread):
@@ -200,8 +211,7 @@ class Poller(threading.Thread):
                 break
             events += alerts.on_cycle(ok, errors)
             if ok:
-                if tel.rssi is None and alerts.last is not None:
-                    tel.rssi = alerts.last.rssi  # Wi-Fi читаємо рідше — тримаємо останнє
+                carry_slow_fields(tel, alerts.last)
                 events += alerts.on_telemetry(tel)
                 storage.add_sample(tel)
                 self.on_telemetry(tel)

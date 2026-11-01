@@ -51,7 +51,9 @@ def ago(ts: float | None, now: float) -> str:
         return f"{s} с тому"
     if s < 3600:
         return f"{s // 60} хв тому"
-    return f"{s // 3600} год тому"
+    if s < 86400:
+        return f"{s // 3600} год тому"
+    return f"{s // 86400} дн тому"
 
 
 def rssi_quality(rssi: float | None) -> str:
