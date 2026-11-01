@@ -6,7 +6,6 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 
-from . import theme  # noqa: F401  (до імпорту pyqtgraph — обирає PySide6)
 from ..config import AppConfig, data_dir
 
 
@@ -24,13 +23,13 @@ def main() -> int:
     setup_logging()
     from PySide6.QtWidgets import QApplication
 
-    from .main_window import MainWindow, window_title
+    from . import theme
+    from .main_window import MainWindow
 
     app = QApplication(sys.argv)
     app.setApplicationName("Marstek Metrics")
     theme.apply(app)
     win = MainWindow(AppConfig.load())
-    win.setWindowTitle(window_title())
     win.show()
     return app.exec()
 

@@ -48,22 +48,18 @@ def apply(app: QApplication) -> dict[str, str]:
             background: {c['card']}; border: 1px solid {c['border']}; border-radius: 10px;
         }}
         QLabel#cardTitle {{ color: {c['muted']}; font-size: 9pt; }}
-        QLabel#cardValue {{ font-size: 20pt; font-weight: 600; }}
-        QLabel#cardSub {{ color: {c['muted']}; font-size: 9pt; }}
-        QLabel#deviceTitle {{ font-size: 15pt; font-weight: 600; }}
+        QLabel#bigValue {{ font-size: 40pt; font-weight: 600; }}
+        QLabel#stateValue {{ font-size: 13pt; }}
+        QLabel#deviceTitle {{ font-size: 13pt; font-weight: 600; }}
         QLabel#muted {{ color: {c['muted']}; }}
         QLabel#pill {{
             border-radius: 10px; padding: 3px 10px; color: white; font-weight: 600;
         }}
-        QTabWidget::pane {{ border: none; }}
-        QTabBar::tab {{ padding: 8px 18px; }}
-        QTableWidget {{
-            background: {c['card']}; border: 1px solid {c['border']}; border-radius: 8px;
-            gridline-color: {c['border']};
-        }}
+        QListWidget#journal {{ border: none; background: transparent; }}
+        QListWidget#journal::item {{ padding: 4px 0; border-bottom: 1px solid {c['border']}; }}
         QProgressBar {{
-            border: none; border-radius: 4px; background: {c['border']}; max-height: 8px;
+            border: none; border-radius: 5px; background: {c['border']}; max-height: 10px;
         }}
-        QProgressBar::chunk {{ border-radius: 4px; background: {STATION}; }}
+        QProgressBar::chunk {{ border-radius: 5px; background: {STATION}; }}
     """)
     return c

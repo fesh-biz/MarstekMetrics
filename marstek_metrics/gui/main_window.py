@@ -1,42 +1,41 @@
-"""Головне вікно."""
+"""Головне вікно: заряд батареї, заряджання/розряджання і помилки."""
 
 from __future__ import annotations
 
-import datetime as dt
 import time
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView,
-    QButtonGroup,
-    QComboBox,
-    QGridLayout,
+    QFrame,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
+    QProgressBar,
     QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from .. import APP_NAME, __version__, fmt
-from ..alerts import LEVEL_UK, Event
+from ..alerts import Event
 from ..config import AppConfig, data_dir
-from ..metrics import daily_summaries, local_day_bounds, summarize
-from ..models import MODE_TITLES_UK, DeviceInfo, Telemetry
+from ..models import DeviceInfo, Telemetry
 from ..poller import Poller
 from ..storage import Storage
 from . import theme
-from .charts import DailyBars, PowerChart
 from .settings_dialog import SettingsDialog
-from .widgets import StatusPill, Tile
+from .widgets import StatusPill
 
-RANGES = (("1 год", 3600), ("6 год", 6 * 3600), ("24 год", 86400), ("7 дн", 7 * 86400))
+# Нижче цієї потужності вважаємо, що батарея простоює
+IDLE_W = 5
+JOURNAL_LIMIT = 50
+
+CHARGE_COLOR = "#16a34a"
+DISCHARGE_COLOR = "#d97706"
+IDLE_COLOR = "#64748b"
 
 
 class Bridge(QObject):
@@ -48,6 +47,23 @@ class Bridge(QObject):
     status = Signal(str)
 
 
+def battery_text(t: Telemetry | None) -> tuple[str, str, str]:
+    """(стан, потужність, колір) для блоку батареї."""
+    if t is None or t.battery_power is None:
+        return "Немає даних", "", IDLE_COLOR
+    p = t.battery_power
+    if p > IDLE_W:
+        return "Заряджається", fmt.power(p), CHARGE_COLOR
+    if p < -IDLE_W:
+        return "Розряджається", fmt.power(-p), DISCHARGE_COLOR
+    return "Очікування", "", IDLE_COLOR
+
+
+def is_problem(e: Event) -> bool:
+    """Чи показувати запис у журналі помилок."""
+    return e.resolved or e.level in ("error", "warning")
+
+
 class MainWindow(QMainWindow):
     def __init__(self, cfg: AppConfig):
         super().__init__()
@@ -56,9 +72,8 @@ class MainWindow(QMainWindow):
         self.storage = Storage(self.db_path)
         self.poller: Poller | None = None
         self.info: DeviceInfo | None = None
-        self.last: Telemetry | None = self.storage.latest()
+        self.last: Telemetry | None = None
         self.active: dict[str, Event] = {}
-        self.range_s = RANGES[1][1]
 
         self.bridge = Bridge()
         self.bridge.telemetry.connect(self._on_telemetry)
@@ -66,36 +81,31 @@ class MainWindow(QMainWindow):
         self.bridge.device.connect(self._on_device)
         self.bridge.status.connect(lambda s: self.pill.set_status(s))
 
-        self.setWindowTitle(APP_NAME)
-        self.resize(1180, 780)
+        self.setWindowTitle(f"{APP_NAME} {__version__}")
+        self.resize(420, 560)
+        self.setMinimumSize(360, 440)
+
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
-        root.setContentsMargins(18, 14, 18, 14)
+        root.setContentsMargins(16, 14, 16, 14)
         root.setSpacing(12)
         root.addLayout(self._build_header())
-
-        self.tabs = QTabWidget()
-        self.tabs.addTab(self._build_now_tab(), "Зараз")
-        self.tabs.addTab(self._build_usage_tab(), "Споживання")
-        self.tabs.addTab(self._build_events_tab(), "Помилки")
-        self.tabs.currentChanged.connect(self._on_tab)
-        root.addWidget(self.tabs, 1)
+        root.addWidget(self._build_battery())
+        root.addWidget(self._build_errors(), 1)
 
         self.clock = QTimer(self)
         self.clock.timeout.connect(self._tick)
         self.clock.start(1000)
-        self.usage_timer = QTimer(self)
-        self.usage_timer.timeout.connect(lambda: self._refresh_usage())
-        self.usage_timer.start(5 * 60 * 1000)
 
-        self._refresh_all()
+        self._show_battery()
+        self._refresh_errors()
         if cfg.host:
             self._start_poller()
         else:
             QTimer.singleShot(200, self._open_settings)
 
-    # --- побудова -----------------------------------------------------------
+    # --- побудова ---------------------------------------------------------------
 
     def _build_header(self) -> QHBoxLayout:
         row = QHBoxLayout()
@@ -110,134 +120,72 @@ class MainWindow(QMainWindow):
         row.addLayout(col, 1)
         self.pill = StatusPill()
         row.addWidget(self.pill, 0, Qt.AlignmentFlag.AlignVCenter)
-        self.refresh_btn = QPushButton("Оновити")
-        self.refresh_btn.clicked.connect(lambda _c=False: self._poll_now())
-        row.addWidget(self.refresh_btn)
-        settings = QPushButton("Налаштування")
+        settings = QPushButton("⚙")
+        settings.setToolTip("Налаштування")
+        settings.setFixedWidth(36)
         settings.clicked.connect(lambda _c=False: self._open_settings())
-        row.addWidget(settings)
+        row.addWidget(settings, 0, Qt.AlignmentFlag.AlignVCenter)
         return row
 
-    def _build_now_tab(self) -> QWidget:
-        w = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(0, 12, 0, 0)
-        grid = QGridLayout()
-        grid.setSpacing(12)
-        self.t_house = Tile("Споживання будинку", theme.HOUSE)
-        self.t_grid = Tile("Зовнішня мережа", theme.GRID)
-        self.t_station = Tile("Станція", theme.STATION)
-        self.t_soc = Tile("Батарея", theme.BATTERY, progress=True)
-        self.t_today = Tile("Споживання будинку сьогодні")
-        self.t_mode = Tile("Режим роботи")
-        self.t_ct = Tile("CT-лічильник")
-        self.t_wifi = Tile("Wi-Fi")
-        tiles = [self.t_house, self.t_grid, self.t_station, self.t_soc,
-                 self.t_today, self.t_mode, self.t_ct, self.t_wifi]
-        for i, t in enumerate(tiles):
-            grid.addWidget(t, i // 4, i % 4)
-        for c in range(4):
-            grid.setColumnStretch(c, 1)
-        lay.addLayout(grid)
+    def _build_battery(self) -> QFrame:
+        card = QFrame()
+        card.setObjectName("card")
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(20, 16, 20, 18)
+        lay.setSpacing(6)
 
-        bar = QHBoxLayout()
-        title = QLabel("Потужності")
+        self.soc_label = QLabel("—")
+        self.soc_label.setObjectName("bigValue")
+        self.soc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(self.soc_label)
+
+        self.soc_bar = QProgressBar()
+        self.soc_bar.setRange(0, 100)
+        self.soc_bar.setTextVisible(False)
+        lay.addWidget(self.soc_bar)
+
+        self.state_label = QLabel()
+        self.state_label.setObjectName("stateValue")
+        self.state_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.state_label.setTextFormat(Qt.TextFormat.RichText)
+        lay.addSpacing(4)
+        lay.addWidget(self.state_label)
+
+        self.capacity_label = QLabel()
+        self.capacity_label.setObjectName("muted")
+        self.capacity_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(self.capacity_label)
+        return card
+
+    def _build_errors(self) -> QFrame:
+        card = QFrame()
+        card.setObjectName("card")
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(16, 12, 16, 12)
+        lay.setSpacing(8)
+
+        title = QLabel("Помилки")
         title.setObjectName("cardTitle")
-        bar.addWidget(title)
-        bar.addStretch(1)
-        group = QButtonGroup(self)
-        for i, (label, seconds) in enumerate(RANGES):
-            b = QPushButton(label)
-            b.setCheckable(True)
-            b.setChecked(seconds == self.range_s)
-            group.addButton(b, i)
-            bar.addWidget(b)
-        group.idClicked.connect(self._set_range)
-        lay.addLayout(bar)
-        self.chart = PowerChart()
-        lay.addWidget(self.chart, 1)
-        return w
+        lay.addWidget(title)
 
-    def _build_usage_tab(self) -> QWidget:
-        w = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(0, 12, 0, 0)
-        grid = QGridLayout()
-        grid.setSpacing(12)
-        self.u_today = Tile("Сьогодні", theme.HOUSE)
-        self.u_yesterday = Tile("Учора", theme.HOUSE)
-        self.u_week = Tile("7 днів", theme.HOUSE)
-        self.u_month = Tile("30 днів", theme.HOUSE)
-        for i, t in enumerate((self.u_today, self.u_yesterday, self.u_week, self.u_month)):
-            grid.addWidget(t, 0, i)
-            grid.setColumnStretch(i, 1)
-        lay.addLayout(grid)
-
-        bar = QHBoxLayout()
-        title = QLabel("Споживання за днями")
-        title.setObjectName("cardTitle")
-        bar.addWidget(title)
-        bar.addStretch(1)
-        self.days_combo = QComboBox()
-        for n in (7, 14, 30):
-            self.days_combo.addItem(f"{n} днів", n)
-        self.days_combo.setCurrentIndex(1)
-        self.days_combo.currentIndexChanged.connect(lambda _i: self._refresh_usage())
-        bar.addWidget(self.days_combo)
-        lay.addLayout(bar)
-        self.bars = DailyBars()
-        self.bars.setMinimumHeight(220)
-        lay.addWidget(self.bars, 1)
-
-        self.days_table = QTableWidget(0, 8)
-        self.days_table.setHorizontalHeaderLabels([
-            "Дата", "Будинок спожив", "З мережі", "У мережу", "Станція віддала",
-            "Станція зарядилася", "Пік будинку", "Даних за день",
-        ])
-        self._setup_table(self.days_table)
-        lay.addWidget(self.days_table, 1)
-        return w
-
-    def _build_events_tab(self) -> QWidget:
-        w = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(0, 12, 0, 0)
         self.active_label = QLabel()
         self.active_label.setWordWrap(True)
         self.active_label.setTextFormat(Qt.TextFormat.RichText)
         lay.addWidget(self.active_label)
-        bar = QHBoxLayout()
-        title = QLabel("Журнал")
-        title.setObjectName("cardTitle")
-        bar.addWidget(title)
-        bar.addStretch(1)
-        self.events_filter = QComboBox()
-        self.events_filter.addItem("Лише проблеми", ("error", "warning"))
-        self.events_filter.addItem("Усі записи", None)
-        self.events_filter.currentIndexChanged.connect(lambda _i: self._refresh_events())
-        bar.addWidget(self.events_filter)
-        lay.addLayout(bar)
-        self.events_table = QTableWidget(0, 3)
-        self.events_table.setHorizontalHeaderLabels(["Час", "Рівень", "Повідомлення"])
-        self._setup_table(self.events_table)
-        self.events_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        lay.addWidget(self.events_table, 1)
-        hint = QLabel(f"База та лог: {data_dir()}")
-        hint.setObjectName("muted")
-        hint.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        lay.addWidget(hint)
-        return w
 
-    @staticmethod
-    def _setup_table(t: QTableWidget) -> None:
-        t.verticalHeader().setVisible(False)
-        t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        t.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        t.setAlternatingRowColors(False)
-        t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        t.horizontalHeader().setStretchLastSection(True)
+        journal = QLabel("Журнал")
+        journal.setObjectName("cardTitle")
+        lay.addWidget(journal)
 
-    # --- опитування ------------------------------------------------------------------
+        self.journal = QListWidget()
+        self.journal.setObjectName("journal")
+        self.journal.setWordWrap(True)
+        self.journal.setSelectionMode(QListWidget.SelectionMode.NoSelection)
+        self.journal.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        lay.addWidget(self.journal, 1)
+        return card
+
+    # --- опитування -----------------------------------------------------------
 
     def _start_poller(self) -> None:
         self.poller = Poller(
@@ -249,11 +197,7 @@ class MainWindow(QMainWindow):
         )
         self.active.clear()
         self.poller.start()
-        self.device_sub.setText(f"{self.cfg.host}:{self.cfg.port} · підключення…")
-
-    def _poll_now(self) -> None:
-        if self.poller is not None:
-            self.poller.poll_now()
+        self.device_sub.setText(f"{self.cfg.host} · підключення…")
 
     def _stop_poller(self) -> None:
         if self.poller is not None:
@@ -272,7 +216,7 @@ class MainWindow(QMainWindow):
         if self.cfg.host:
             self._start_poller()
 
-    # --- обробка даних ----------------------------------------------------
+    # --- події ------------------------------------------------------------------
 
     def _on_device(self, info: DeviceInfo) -> None:
         self.info = info
@@ -280,9 +224,7 @@ class MainWindow(QMainWindow):
 
     def _on_telemetry(self, t: Telemetry) -> None:
         self.last = t
-        self._refresh_now()
-        if self.tabs.currentIndex() == 1:
-            self._refresh_usage()
+        self._show_battery()
 
     def _on_events(self, events: list[Event]) -> None:
         for e in events:
@@ -291,153 +233,61 @@ class MainWindow(QMainWindow):
             elif e.level in ("error", "warning") and not e.code.startswith("rpc:") \
                     and e.code != "counter_reset":
                 self.active[e.code] = e
-        self._refresh_events()
-
-    def _on_tab(self, index: int) -> None:
-        if index == 1:
-            self._refresh_usage()
-        elif index == 2:
-            self._refresh_events()
-
-    def _set_range(self, idx: int) -> None:
-        self.range_s = RANGES[idx][1]
-        self._refresh_chart()
+        self._refresh_errors()
+        if "offline" in self.active:
+            self._show_battery()
 
     def _tick(self) -> None:
         if self.info is not None:
             when = fmt.ago(self.last.ts if self.last else None, time.time())
-            self.device_sub.setText(
-                f"{self.info.host}:{self.cfg.port} · прошивка {self.info.ver} · оновлено {when}"
-            )
+            self.device_sub.setText(f"{self.info.host} · оновлено {when}")
 
-    # --- оновлення екранів -----------------------------------------------------
+    # --- відображення ---------------------------------------------------------
 
-    def _refresh_all(self) -> None:
-        self._refresh_now()
-        self._refresh_events()
-
-    def _refresh_now(self) -> None:
+    def _show_battery(self) -> None:
         t = self.last
-        if t is None:
-            for tile in (self.t_house, self.t_grid, self.t_station, self.t_soc,
-                         self.t_today, self.t_mode, self.t_ct, self.t_wifi):
-                tile.set("—", "немає даних")
-            self._refresh_chart()
-            return
+        offline = "offline" in self.active
+        soc = None if t is None else t.soc
+        self.soc_label.setText(fmt.percent(soc))
+        self.soc_bar.setValue(int(soc or 0))
 
-        if t.house_power is not None:
-            self.t_house.set(fmt.power(t.house_power), "станція + мережа + off-grid")
-        elif t.ct_connected is False:
-            self.t_house.set("—", "потрібен підключений CT-лічильник")
+        state, power, color = battery_text(None if offline else t)
+        if offline:
+            state = "Немає зв'язку"
+        text = f'<span style="color:{color}">●</span>&nbsp;{state}'
+        if power:
+            text += f"&nbsp;&nbsp;<b>{power}</b>"
+        self.state_label.setText(text)
+
+        if t is not None and t.soc is not None and t.bat_capacity_wh:
+            left = t.bat_capacity_wh * t.soc / 100
+            self.capacity_label.setText(
+                f"у батареї {fmt.energy(left)} з {fmt.energy(t.bat_capacity_wh)}")
         else:
-            self.t_house.set("—", "немає даних CT")
+            self.capacity_label.setText("")
 
-        g = t.grid_power
-        if g is None:
-            self.t_grid.set("—", "немає даних CT")
-        elif g >= 0:
-            self.t_grid.set(fmt.power(g), "беремо з мережі")
-        else:
-            self.t_grid.set(fmt.power(-g), "віддаємо в мережу")
-
-        s = t.station_power
-        if s is None:
-            self.t_station.set("—")
-        elif s > 5:
-            self.t_station.set(fmt.power(s), "віддає в будинок")
-        elif s < -5:
-            self.t_station.set(fmt.power(-s), "заряджається від мережі")
-        else:
-            self.t_station.set("0 Вт", "простоює")
-
-        cap = f" з {fmt.energy(t.bat_capacity_wh)}" if t.bat_capacity_wh else ""
-        bat = "" if t.battery_power is None else f", {fmt.power(abs(t.battery_power))}"
-        sub = f"{t.battery_state}{bat}{cap}"
-        if t.bat_temp is not None:
-            sub += f" · {t.bat_temp:.0f} °C"
-        self.t_soc.set(fmt.percent(t.soc), sub, t.soc)
-
-        start, _ = local_day_bounds(dt.date.today())
-        today = summarize(self.storage.samples(start), "сьогодні", start, time.time())
-        share = today.self_supply_share
-        self.t_today.set(
-            fmt.energy(today.house_wh) if today.samples else "—",
-            f"з мережі {fmt.energy(today.grid_import_wh)}"
-            + (f" · станція покрила {fmt.percent(share * 100)}" if share is not None else ""),
-        )
-
-        self.t_mode.set(MODE_TITLES_UK.get(t.mode or "", t.mode or "—"),
-                        "станція сама керує потужністю" if t.mode in ("Auto", "AI") else "")
-        if t.ct_connected is None:
-            self.t_ct.set("—")
-        elif t.ct_connected:
-            phases = [p for p in (t.phase_a, t.phase_b, t.phase_c) if p]
-            self.t_ct.set("підключено", " / ".join(fmt.power(p) for p in phases) if len(phases) > 1 else "")
-        else:
-            self.t_ct.set("немає зв'язку", "перевірте CT002/CT003")
-        self.t_wifi.set(fmt.rssi_quality(t.rssi).split(",")[0],
-                        fmt.rssi_quality(t.rssi).split(", ")[-1] if t.rssi is not None else "")
-        self._refresh_chart()
-
-    def _refresh_chart(self) -> None:
-        end = time.time()
-        start = end - self.range_s
-        self.chart.set_samples(self.storage.samples(start), start, end)
-
-    def _refresh_usage(self) -> None:
-        n = self.days_combo.currentData() or 14
-        days = daily_summaries(self.storage.samples, max(n, 30))
-        shown = days[-n:]
-        self.bars.set_days(shown)
-
-        def total(items):
-            return sum(d.house_wh for d in items), sum(d.grid_import_wh for d in items)
-
-        for tile, items in ((self.u_today, days[-1:]), (self.u_yesterday, days[-2:-1]),
-                            (self.u_week, days[-7:]), (self.u_month, days[-30:])):
-            house, grid = total(items)
-            has = any(d.samples for d in items)
-            tile.set(fmt.energy(house) if has else "—",
-                     f"з мережі {fmt.energy(grid)}" if has else "немає даних")
-
-        self.days_table.setRowCount(len(shown))
-        for row, d in enumerate(reversed(shown)):
-            values = [
-                d.label, fmt.energy(d.house_wh), fmt.energy(d.grid_import_wh),
-                fmt.energy(d.grid_export_wh), fmt.energy(d.station_out_wh),
-                fmt.energy(d.station_in_wh), fmt.power(d.peak_house_w),
-                fmt.percent(d.coverage * 100) if d.samples else "—",
-            ]
-            for col, v in enumerate(values):
-                item = QTableWidgetItem(v)
-                if col:
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                self.days_table.setItem(row, col, item)
-
-    def _refresh_events(self) -> None:
-        levels = self.events_filter.currentData()
-        events = self.storage.events(limit=500, levels=levels)
-        self.events_table.setRowCount(len(events))
-        for row, e in enumerate(events):
-            color = QColor(theme.LEVEL_COLORS["info" if e.resolved else e.level])
-            level = "Вирішено" if e.resolved else LEVEL_UK.get(e.level, e.level)
-            for col, text in enumerate((fmt.ts_full(e.ts), level, e.message)):
-                item = QTableWidgetItem(text)
-                if col == 1:
-                    item.setForeground(color)
-                self.events_table.setItem(row, col, item)
-
+    def _refresh_errors(self) -> None:
         if self.active:
             items = "".join(
-                f'<li><span style="color:{theme.LEVEL_COLORS[e.level]}">●</span> {e.message}</li>'
+                f'<p style="margin:2px 0"><span style="color:{theme.LEVEL_COLORS[e.level]}">●</span>'
+                f"&nbsp;{e.message}</p>"
                 for e in sorted(self.active.values(), key=lambda e: e.level != "error")
             )
-            self.active_label.setText(f"<b>Активні проблеми</b><ul>{items}</ul>")
+            self.active_label.setText(items)
         else:
             self.active_label.setText(
-                f'<span style="color:{theme.STATION}">●</span> Активних проблем немає')
-        n = len(self.active)
-        self.tabs.setTabText(2, f"Помилки ({n})" if n else "Помилки")
+                f'<span style="color:{CHARGE_COLOR}">●</span>&nbsp;Зараз помилок немає')
+
+        events = [e for e in self.storage.events(limit=JOURNAL_LIMIT * 3) if is_problem(e)]
+        self.journal.clear()
+        for e in events[:JOURNAL_LIMIT]:
+            color = theme.LEVEL_COLORS["info" if e.resolved else e.level]
+            prefix = "✓ " if e.resolved else ""
+            item = QListWidgetItem(f"{fmt.ts_full(e.ts)}\n{prefix}{e.message}")
+            item.setForeground(QColor(color) if not e.resolved else QColor(IDLE_COLOR))
+            self.journal.addItem(item)
+        if not events:
+            self.journal.addItem(QListWidgetItem("Записів поки немає"))
 
     # --- закриття ------------------------------------------------------------
 
@@ -445,7 +295,3 @@ class MainWindow(QMainWindow):
         self._stop_poller()
         self.storage.close()
         super().closeEvent(event)
-
-
-def window_title() -> str:
-    return f"{APP_NAME} {__version__}"

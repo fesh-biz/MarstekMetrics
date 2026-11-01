@@ -28,6 +28,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           PYTHONUTF8: "1"
+          SCREENSHOT_DIR: screenshots
         run: |
           set +e
           pytest -v --tb=short -p no:cacheprovider 2>&1 | tee pytest.log
@@ -38,6 +39,14 @@ jobs:
             echo "::error title=pytest::$msg"
           fi
           exit $status
+
+      - name: Знімок вікна
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot
+          path: screenshots/
+          if-no-files-found: ignore
 
       - name: Зібрати MarstekMetrics.exe
         run: pyinstaller --noconfirm --clean --windowed --onefile --name MarstekMetrics run_gui.py

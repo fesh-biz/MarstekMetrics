@@ -6,7 +6,6 @@ import time
 import pytest
 
 pytest.importorskip("PySide6")
-pytest.importorskip("pyqtgraph")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
@@ -32,11 +31,14 @@ def test_main_window_with_emulator(tmp_path, monkeypatch):
             app.processEvents()
             time.sleep(0.05)
         assert win.last is not None
-        assert win.t_house.value.text() != "—"
-        for i in range(3):
-            win.tabs.setCurrentIndex(i)
-            app.processEvents()
-        win.grab().save(str(tmp_path / "window.png"))
+        assert win.soc_label.text() != "—"
+        assert "Розряджається" in win.state_label.text() or "Заряджається" in win.state_label.text()
+        assert win.journal.count() >= 1
+        app.processEvents()
+        out = os.environ.get("SCREENSHOT_DIR")
+        if out:
+            os.makedirs(out, exist_ok=True)
+            win.grab().save(os.path.join(out, "window.png"))
     finally:
         win.close()
         mock.stop()
