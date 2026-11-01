@@ -36,7 +36,7 @@ jobs:
           if [ "$status" -ne 0 ]; then
             # хвіст виводу — в анотацію, щоб причину було видно без завантаження логів
             msg=$(tail -n 150 pytest.log | sed 's/%/%25/g; s/\r//g' | sed ':a;N;$!ba;s/\n/%0A/g')
-            echo "::error title=pytest::$msg"
+            echo "::error title=pytest::exit=$status%0A$msg"
           fi
           exit $status
 

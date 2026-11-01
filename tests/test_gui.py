@@ -41,4 +41,6 @@ def test_main_window_with_emulator(tmp_path, monkeypatch):
             win.grab().save(os.path.join(out, "window.png"))
     finally:
         win.close()
+        win.deleteLater()
+        app.processEvents()
         mock.stop()

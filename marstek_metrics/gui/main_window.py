@@ -326,6 +326,7 @@ class MainWindow(QMainWindow):
     # --- закриття ------------------------------------------------------------
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        self.clock.stop()
         self._stop_poller()
         self.storage.close()
         super().closeEvent(event)
